@@ -1,0 +1,81 @@
+---
+title: "scFPCDE Overview"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{scFPCDE Overview}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(scFPCDE)
+library(dplyr)
+library(tidyr)
+```
+
+## Overview
+
+The `scFPCDE` package provides a statistical framework to detect differential gene expression along pseudotime in single-cell data using Functional Principal Component Analysis (FPCA).
+
+This vignette walks through a complete pipeline using a simulated dataset.
+
+## Load Simulated Dataset
+
+We load a simulated dataset with 1000 cells × 500 genes:
+- 100 DE genes are generated as linear combinations of 3 smooth basis functions.
+- 400 genes are random noise.
+- Cells are assigned to three clusters based on pseudotime.
+
+```{r simulate}
+data("scFPCDE_simdata")
+sim <- scFPCDE_simdata
+yt <- sim$yt
+tt <- sim$tt
+clusters <- sim$clusters
+```
+
+## Run Differential Expression Analysis
+
+We apply the main `scFPCDE_run()` wrapper, which:
+- Smooths gene expression curves
+- Performs FPCA
+- Computes both D-statistic and F-statistic via permutation tests
+
+```{r run}
+res <- scFPCDE_run(yt, tt)
+```
+
+## Visualize Smoothed Gene Expression Curves
+
+We use `scFPCDE_gene_curves()` to visualize the fitted FPCA curves:
+- `yt_fit` is the FPCA-reconstructed matrix
+- `cell_cluster` is used to color points by cluster
+- We subset the top 12 genes for clarity
+
+```{r plot}
+scFPCDE_gene_curves(
+  tt = tt,
+  yt = yt,
+  yt_fit = res$fpca_result$xt_hat,
+  cell_cluster = clusters,
+  subset = 1:12,
+  facet_genes = TRUE,
+  nrow = 3,
+  ncol = 4
+)
+```
+
+## View Statistical Test Results
+
+```{r results}
+head(res$D_test_result)
+head(res$F_test_result)
+```
+
+## Conclusion
+
+This example demonstrates how `scFPCDE` can detect genes with smooth, cluster-driven variation over pseudotime. The simulation is customizable, and the full pipeline is modular for real-world data.

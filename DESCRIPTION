@@ -1,0 +1,27 @@
+Package: scFPCDE
+Title: Functional PCA-Based Differential Expression for Single-Cell Trajectories
+Version: 0.1.0
+Authors@R: person("Ricardo J.", "Lopez Candelaria", 
+                  email = "rlopez.research@gmail.com", 
+                  role = c("aut", "cre"))
+Description: Provides methods to model, smooth, and test differential expression along pseudotime 
+    using functional principal component analysis (FPCA). Includes FPCA fitting, permutation-based 
+    tests, smoothing parameter tuning, and gene-level visualization functions for single-cell data.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Imports:
+    parallel,
+    fda,
+    stats,
+    ggplot2,
+    dplyr,
+    tidyr,
+    magrittr
+RoxygenNote: 7.3.2
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Depends: 
+    R (>= 3.5)
