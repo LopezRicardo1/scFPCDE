@@ -33,7 +33,8 @@ We load a simulated dataset with 1000 cells × 500 genes:
 ```{r simulate}
 data("scFPCDE_simdata")
 sim <- scFPCDE_simdata
-yt <- sim$yt
+yt <- scale(sim$yt)
+
 tt <- sim$tt
 clusters <- sim$clusters
 ```
