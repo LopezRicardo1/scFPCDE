@@ -12,7 +12,7 @@ Installation
 
 Install the package directly from GitHub:
 
-    devtools::install_github("LopezRicardo1/scFPCDE")
+    devtools::install_github("LopezRicardo1/scFPCDE", build_vignettes = TRUE)
 
 Example
 ------------------------------------------------------------------------------
