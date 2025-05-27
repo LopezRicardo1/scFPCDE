@@ -10,11 +10,17 @@
 #' @param nbasis Number of basis functions
 #' @param n_perm Number of permutations
 #' @param topvarper Proportion of top variable genes for eigenfunction estimation
+#' @param center Logical; center each gene across time (default = TRUE)
+#' @param scale Logical; scale each gene to unit variance across time (default = FALSE)
 #'
 #' @return A list with FPCA result, D-test, and F-test results
 #' @export
 scFPCDE_run <- function(yt, tt, L = 2, r_pen = 1e-3, nbasis = 50,
-                        n_perm = 1000, topvarper = 0.1) {
+                        n_perm = 1000, topvarper = 0.1,
+                        center = TRUE, scale = FALSE) {
+
+  # Preprocess gene expression: center and/or scale each gene
+  yt <- scale(yt, center = center, scale = scale)
 
   fpca_result_full <- scFPCDE_fit_fpca(yt, tt, L = L, r_pen = r_pen, nbasis = nbasis)
   D_stat <- rowSums(fpca_result_full$scores^2)
