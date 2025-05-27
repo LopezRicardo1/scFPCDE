@@ -9,10 +9,10 @@ scFPCDE_gene_curves(
   yt,
   yt_fit,
   cell_cluster,
-  subset = NULL,
+  subset = 1:12,
   facet_genes = TRUE,
-  nrow = 7,
-  ncol = 10,
+  nrow = 4,
+  ncol = 3,
   legend_dot_size = 3
 )
 }
