@@ -11,7 +11,9 @@ scFPCDE_run(
   r_pen = 0.001,
   nbasis = 50,
   n_perm = 1000,
-  topvarper = 0.1
+  topvarper = 0.1,
+  center = TRUE,
+  scale = FALSE
 )
 }
 \arguments{
@@ -28,6 +30,10 @@ scFPCDE_run(
 \item{n_perm}{Number of permutations}
 
 \item{topvarper}{Proportion of top variable genes for eigenfunction estimation}
+
+\item{center}{Logical; center each gene across time (default = TRUE)}
+
+\item{scale}{Logical; scale each gene to unit variance across time (default = FALSE)}
 }
 \value{
 A list with FPCA result, D-test, and F-test results
