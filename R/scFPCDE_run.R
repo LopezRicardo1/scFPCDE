@@ -19,6 +19,11 @@ scFPCDE_run <- function(yt, tt, L = 2, r_pen = 1e-3, nbasis = 50,
                         n_perm = 1000, topvarper = 0.1,
                         center = TRUE, scale = FALSE) {
 
+  # Order by pseudotime to ensure consistent trajectory alignment
+  ord <- order(tt)
+  tt <- tt[ord]
+  yt <- yt[ord, , drop = FALSE]
+
   # Preprocess gene expression: center and/or scale each gene
   yt <- scale(yt, center = center, scale = scale)
 
