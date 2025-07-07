@@ -13,30 +13,36 @@ scFPCDE_run(
   n_perm = 1000,
   topvarper = 0.1,
   center = TRUE,
-  scale = FALSE
+  scale = FALSE,
+  ncores = 2,
+  use_FPC_F = FALSE
 )
 }
 \arguments{
-\item{yt}{Matrix of gene expression (rows = timepoints, columns = genes)}
+\item{yt}{Matrix of gene expression (rows = timepoints, columns = genes).}
 
-\item{tt}{Time vector}
+\item{tt}{Time vector.}
 
-\item{L}{Number of harmonics (latent dimensions)}
+\item{L}{Number of harmonics (latent dimensions).}
 
-\item{r_pen}{Smoothing penalty}
+\item{r_pen}{Smoothing penalty.}
 
-\item{nbasis}{Number of basis functions}
+\item{nbasis}{Number of basis functions.}
 
-\item{n_perm}{Number of permutations}
+\item{n_perm}{Number of permutations.}
 
-\item{topvarper}{Proportion of top variable genes for eigenfunction estimation}
+\item{topvarper}{Proportion of top variable genes for eigenfunction estimation.}
 
-\item{center}{Logical; center each gene across time (default = TRUE)}
+\item{center}{Logical; center each gene across time (default = TRUE).}
 
-\item{scale}{Logical; scale each gene to unit variance across time (default = FALSE)}
+\item{scale}{Logical; scale each gene to unit variance across time (default = FALSE).}
+
+\item{ncores}{Number of parallel cores to use for permutation tests. Default is 2.}
+
+\item{use_FPC_F}{Logical; whether to run the FPCA-based F-test. Default is FALSE.}
 }
 \value{
-A list with FPCA result, D-test, and F-test results
+A list with FPCA result, D-test, and optionally F-test results.
 }
 \description{
 Wrapper function to run the full scFPCDE workflow: smoothing with FPCA,

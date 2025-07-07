@@ -4,19 +4,21 @@
 \alias{scFPCDE_F_test}
 \title{FPCA F-statistic Permutation Test}
 \usage{
-scFPCDE_F_test(yt, tt, fpca_result, n_perm = 1000)
+scFPCDE_F_test(yt, tt, fpca_result, n_perm = 1000, ncores = 2)
 }
 \arguments{
-\item{yt}{A matrix of smoothed gene expression values (timepoints × genes)}
+\item{yt}{A matrix of smoothed gene expression values (timepoints × genes).}
 
-\item{tt}{Time vector}
+\item{tt}{Time vector.}
 
-\item{fpca_result}{A list with FPCA results: `$scores`, `$eigenfunctions`, and `$sigma2`}
+\item{fpca_result}{A list with FPCA results: `$scores`, `$eigenfunctions`, and `$sigma2`.}
 
-\item{n_perm}{Number of permutations}
+\item{n_perm}{Number of permutations.}
+
+\item{ncores}{Number of parallel cores to use for permutation. Default is 2.}
 }
 \value{
-A data frame with gene IDs, observed F statistic, p-values, and q-values
+A data frame with gene IDs, observed F statistic, p-values, and q-values.
 }
 \description{
 Performs an F-statistic based permutation test comparing null and FPCA models.

@@ -4,15 +4,13 @@
 \alias{scFPCDE_make_cluster}
 \title{Cross-Platform Cluster Creation Helper}
 \usage{
-scFPCDE_make_cluster(
-  ncores = ncores <- min(2, max(1, parallel::detectCores() - 1))
-)
+scFPCDE_make_cluster(ncores = 2)
 }
 \arguments{
-\item{ncores}{Number of cores to use (default = detectCores() - 1)}
+\item{ncores}{Number of cores to use. Default is 2.}
 }
 \value{
-A cluster object from the parallel package
+A cluster object from the parallel package.
 }
 \description{
 Creates a parallel cluster using `makeForkCluster()` on Unix-like systems and

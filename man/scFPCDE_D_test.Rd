@@ -4,19 +4,21 @@
 \alias{scFPCDE_D_test}
 \title{FPCA Distance-Based Permutation Test (D-statistic)}
 \usage{
-scFPCDE_D_test(yt, tt, fpca_result, n_perm = 1000)
+scFPCDE_D_test(yt, tt, fpca_result, n_perm = 1000, ncores = 2)
 }
 \arguments{
-\item{yt}{A matrix of smoothed gene expression values (timepoints × genes)}
+\item{yt}{A matrix of smoothed gene expression values (timepoints × genes).}
 
-\item{tt}{Time vector}
+\item{tt}{Time vector.}
 
-\item{fpca_result}{A list with FPCA results: `$scores` and `$eigenfunctions`}
+\item{fpca_result}{A list with FPCA results: `$scores` and `$eigenfunctions`.}
 
-\item{n_perm}{Number of permutations}
+\item{n_perm}{Number of permutations.}
+
+\item{ncores}{Number of parallel cores to use for permutation. Default is 2.}
 }
 \value{
-A data frame with gene IDs, observed D statistic, p-values, and q-values
+A data frame with gene IDs, observed D statistic, p-values, and q-values.
 }
 \description{
 Performs a permutation-based D-statistic test using functional PCA scores.

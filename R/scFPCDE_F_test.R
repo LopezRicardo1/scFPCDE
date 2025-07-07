@@ -2,14 +2,15 @@
 #'
 #' Performs an F-statistic based permutation test comparing null and FPCA models.
 #'
-#' @param yt A matrix of smoothed gene expression values (timepoints × genes)
-#' @param tt Time vector
-#' @param fpca_result A list with FPCA results: `$scores`, `$eigenfunctions`, and `$sigma2`
-#' @param n_perm Number of permutations
-#' @return A data frame with gene IDs, observed F statistic, p-values, and q-values
+#' @param yt A matrix of smoothed gene expression values (timepoints × genes).
+#' @param tt Time vector.
+#' @param fpca_result A list with FPCA results: `$scores`, `$eigenfunctions`, and `$sigma2`.
+#' @param n_perm Number of permutations.
+#' @param ncores Number of parallel cores to use for permutation. Default is 2.
+#' @return A data frame with gene IDs, observed F statistic, p-values, and q-values.
 #' @export
 #' @importFrom stats p.adjust
-scFPCDE_F_test <- function(yt, tt, fpca_result, n_perm = 1000) {
+scFPCDE_F_test <- function(yt, tt, fpca_result, n_perm = 1000, ncores = 2) {
   scores <- t(fpca_result$scores)
   Phi <- fpca_result$eigenfunctions
   sigma2 <- fpca_result$sigma2
@@ -19,7 +20,7 @@ scFPCDE_F_test <- function(yt, tt, fpca_result, n_perm = 1000) {
   RSS1 <- colSums((yt - yt_hat)^2)
   F_obs <- (RSS0 - RSS1) / (RSS1 + sigma2)
 
-  cl <- scFPCDE_make_cluster()
+  cl <- scFPCDE_make_cluster(ncores = ncores)
   permuted_F_stats <- parallel::parSapply(cl, 1:n_perm, function(i) {
     yt_perm <- yt[sample(nrow(yt)), ]
     scores_perm <- solve(crossprod(Phi), crossprod(Phi, yt_perm))
