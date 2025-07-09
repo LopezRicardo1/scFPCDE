@@ -25,7 +25,7 @@ scFPCDE_tune_fpca <- function(yt, tt, L = 3, r_pen_range = exp(-5:1),
     nbasis <- as.numeric(params["nbasis"])
     r_pen <- as.numeric(params["r_pen"])
     fpca_res <- scFPCDE_fit_fpca(yt, tt, L, r_pen, nbasis, topvarsub = top_idx)
-    sum(fpca_res$fda_splines$gcv)
+    mean(fpca_res$fda_splines$gcv)
   }
 
   cl <- scFPCDE_make_cluster()
