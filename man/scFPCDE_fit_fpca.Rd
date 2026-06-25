@@ -4,7 +4,15 @@
 \alias{scFPCDE_fit_fpca}
 \title{Fit Functional Principal Component Analysis (FPCA)}
 \usage{
-scFPCDE_fit_fpca(yt, tt, L = 2, r_pen = 0.001, nbasis = 50, topvarsub = NULL)
+scFPCDE_fit_fpca(
+  yt,
+  tt,
+  L = 2,
+  r_pen = 0.001,
+  nbasis = 50,
+  topvarsub = NULL,
+  fpc_varmax = TRUE
+)
 }
 \arguments{
 \item{yt}{Matrix of gene expression (rows = timepoints, columns = genes)}
@@ -18,6 +26,8 @@ scFPCDE_fit_fpca(yt, tt, L = 2, r_pen = 0.001, nbasis = 50, topvarsub = NULL)
 \item{nbasis}{Number of basis functions}
 
 \item{topvarsub}{Optional indices of genes to subset for FPCA basis estimation}
+
+\item{fpc_varmax}{VARIMAX rotation on FPC eigenfunctions}
 }
 \value{
 A list with scores, eigenfunctions, fitted values, and FPCA internals

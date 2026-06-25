@@ -8,10 +8,11 @@
 #' @param r_pen Smoothing penalty
 #' @param nbasis Number of basis functions
 #' @param topvarsub Optional indices of genes to subset for FPCA basis estimation
+#' @param fpc_varmax VARIMAX rotation on FPC eigenfunctions
 #'
 #' @return A list with scores, eigenfunctions, fitted values, and FPCA internals
 #' @export
-scFPCDE_fit_fpca <- function(yt, tt, L = 2, r_pen = 1e-3, nbasis = 50, topvarsub = NULL) {
+scFPCDE_fit_fpca <- function(yt, tt, L = 2, r_pen = 1e-3, nbasis = 50, topvarsub = NULL, fpc_varmax = TRUE) {
   original_yt <- yt
   if (!is.null(topvarsub)) yt <- yt[, topvarsub]
 
@@ -20,7 +21,7 @@ scFPCDE_fit_fpca <- function(yt, tt, L = 2, r_pen = 1e-3, nbasis = 50, topvarsub
   par <- fda::fdPar(basis, 2, lambda = r_pen)
   ss <- fda::smooth.basis(tt, yt_centered, par)
   fpca <- fda::pca.fd(ss$fd, nharm = L, centerfns = FALSE)
-
+  if(fpc_varmax) fpca <- fda::varmx.pca.fd(fpca)
   Phi <- fda::eval.fd(tt, fpca$harmonics)
   original_yt_centered <- sweep(original_yt, 2, colMeans(original_yt), "-")
   scores <- solve(crossprod(Phi), crossprod(Phi, original_yt_centered))
@@ -35,6 +36,7 @@ scFPCDE_fit_fpca <- function(yt, tt, L = 2, r_pen = 1e-3, nbasis = 50, topvarsub
     sigma2 = sigma2,
     xt_hat = xt_hat,
     fda_splines = ss,
-    fda_fpca = fpca
+    fda_fpca = fpca,
+    fpc_varmax = fpc_varmax
   ))
 }
