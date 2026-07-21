@@ -15,7 +15,8 @@ scFPCDE_run(
   center = TRUE,
   scale = FALSE,
   ncores = 2,
-  use_FPC_F = FALSE
+  use_FPC_F = FALSE,
+  fpc_varmax = TRUE
 )
 }
 \arguments{

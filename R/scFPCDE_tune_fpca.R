@@ -14,7 +14,7 @@
 scFPCDE_tune_fpca <- function(yt, tt, L = 3, r_pen_range = exp(-5:1),
                               nbasis_range = 1:5 * 20, topvarper = 0.1) {
   p <- ncol(yt)
-  fpca0 <- scFPCDE_fit_fpca(yt, tt, L, r_pen = r_pen_range[1], nbasis = nbasis_range[1])
+  fpca0 <- scFPCDE_fit_fpca(yt, tt, L, r_pen = r_pen_range[1], nbasis = nbasis_range[1], fpc_varmax = FALSE)
   signal_strength <- rowSums(fpca0$scores^2)
   top_n <- ceiling(topvarper * p)
   top_idx <- order(signal_strength, decreasing = TRUE)[1:top_n]
@@ -24,7 +24,7 @@ scFPCDE_tune_fpca <- function(yt, tt, L = 3, r_pen_range = exp(-5:1),
   calc_gcv <- function(params) {
     nbasis <- as.numeric(params["nbasis"])
     r_pen <- as.numeric(params["r_pen"])
-    fpca_res <- scFPCDE_fit_fpca(yt, tt, L, r_pen, nbasis, topvarsub = top_idx)
+    fpca_res <- scFPCDE_fit_fpca(yt, tt, L, r_pen, nbasis, topvarsub = top_idx,fpc_varmax = FALSE)
     mean(fpca_res$fda_splines$gcv)
   }
 

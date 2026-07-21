@@ -20,7 +20,8 @@
 scFPCDE_run <- function(yt, tt, L = 2, r_pen = 1e-3, nbasis = 50,
                         n_perm = 1000, topvarper = 0.1,
                         center = TRUE, scale = FALSE,
-                        ncores = 2, use_FPC_F = FALSE) {
+                        ncores = 2, use_FPC_F = FALSE,
+                        fpc_varmax = TRUE) {
 
   # Order by pseudotime to ensure consistent trajectory alignment
   ord <- order(tt)
@@ -32,7 +33,8 @@ scFPCDE_run <- function(yt, tt, L = 2, r_pen = 1e-3, nbasis = 50,
 
   # Initial FPCA using all genes
   fpca_result_full <- scFPCDE_fit_fpca(
-    yt, tt, L = L, r_pen = r_pen, nbasis = nbasis
+    yt, tt, L = L, r_pen = r_pen, nbasis = nbasis,
+    fpc_varmax = fpc_varmax
   )
 
   # Select top variable genes
@@ -44,7 +46,8 @@ scFPCDE_run <- function(yt, tt, L = 2, r_pen = 1e-3, nbasis = 50,
   # Refit FPCA on top variable genes
   fpca_result_top <- scFPCDE_fit_fpca(
     yt, tt, L = L, r_pen = r_pen, nbasis = nbasis,
-    topvarsub = top_idx
+    topvarsub = top_idx,
+    fpc_varmax = fpc_varmax
   )
 
   # Run D-test
