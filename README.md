@@ -1,5 +1,3 @@
-README for scFPCDE
-
 Functional PCA-Based Differential Expression for Single-Cell Trajectories
 ------------------------------------------------------------------------------
 
@@ -12,7 +10,7 @@ Installation
 
 Install the package directly from GitHub:
 
-    devtools::install_github("LopezRicardo1/scFPCDE", build_vignettes = TRUE)
+    devtools::install_github("NLM-DIR/scFPCDE", build_vignettes = TRUE)
 
 Example
 ------------------------------------------------------------------------------
