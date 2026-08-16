@@ -3,24 +3,26 @@
 \docType{data}
 \name{scFPCDE_simdata}
 \alias{scFPCDE_simdata}
-\title{Simulated scFPCDE Dataset}
+\title{Simulated Single-Cell Trajectory Dataset}
 \format{
 A list with the following components:
 \describe{
-  \item{yt}{A numeric matrix of gene expression (1000 cells × 500 genes)}
-  \item{tt}{A numeric vector of pseudotime values (length 1000)}
-  \item{clusters}{A character vector of cluster assignments ("1", "2", "3")}
+  \item{yt}{A numeric matrix of expression values with 1,000 cells in rows
+  and 500 genes in columns.}
+  \item{tt}{A numeric pseudotime vector of length 1,000, ranging from 0 to 1.}
+  \item{clusters}{A character vector of cluster assignments with levels
+  `"0"`, `"1"`, and `"2"`.}
 }
 }
 \source{
-Generated with `scFPCDE_simulate_data()` (now internal)
+Simulated for the scFPCDE study.
 }
 \usage{
 data(scFPCDE_simdata)
 }
 \description{
-A simulated dataset with 1000 cells and 500 genes, including pseudotime and cluster labels.
-100 genes are differentially expressed using functional basis combinations.
-400 are null genes.
+A simulated dataset with 1,000 cells and 500 genes, including pseudotime and
+cluster labels. The first 100 genes are differentially expressed using
+functional basis combinations; the remaining 400 genes are null.
 }
 \keyword{datasets}

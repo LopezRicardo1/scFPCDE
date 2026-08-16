@@ -2,21 +2,24 @@
 % Please edit documentation in R/permp_utils.R
 \name{permp}
 \alias{permp}
-\title{Reverse-Rank Permutation P-values}
+\title{Compute Permutation P-Values}
 \usage{
 permp(stats0, stats.perm, method = c("naive", "revrank"))
 }
 \arguments{
-\item{stats0}{Vector of observed statistics}
+\item{stats0}{Numeric vector of observed statistics.}
 
-\item{stats.perm}{Vector of permutation statistics}
+\item{stats.perm}{Numeric vector containing the pooled permutation
+statistics.}
 
-\item{method}{Method to compute p-values: "naive" or "revrank"}
+\item{method}{Character string selecting `"naive"` or `"revrank"`.}
 }
 \value{
-Vector of p-values
+A numeric vector of permutation p-values, one per observed
+  statistic.
 }
 \description{
-Helper function to compute permutation p-values using either naive or reverse-rank method.
+Internal helper for computing permutation p-values using either a direct
+comparison or the equivalent reverse-rank calculation.
 }
 \keyword{internal}

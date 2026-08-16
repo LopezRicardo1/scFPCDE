@@ -2,7 +2,7 @@
 % Please edit documentation in R/scFPCDE_gene_curves.R
 \name{scFPCDE_gene_curves}
 \alias{scFPCDE_gene_curves}
-\title{Plot Smoothed and Observed Gene Expression Curves}
+\title{Plot Observed and Fitted Gene-Expression Curves}
 \usage{
 scFPCDE_gene_curves(
   tt,
@@ -17,27 +17,48 @@ scFPCDE_gene_curves(
 )
 }
 \arguments{
-\item{tt}{Vector of pseudotime values (length = # of timepoints)}
+\item{tt}{Numeric pseudotime vector with one value per row of `yt`.}
 
-\item{yt}{Matrix of original expression data (rows = timepoints, columns = genes)}
+\item{yt}{Numeric observed expression matrix with observations in rows and
+genes in columns. When plotting a result from [scFPCDE_run()], apply the
+same centering and scaling used in that call.}
 
-\item{yt_fit}{Matrix of fitted expression values (same dimensions as yt)}
+\item{yt_fit}{Numeric matrix of fitted expression values with the same
+dimensions and gene names as `yt`.}
 
-\item{cell_cluster}{Vector of cluster assignments (length = ncol(yt))}
+\item{cell_cluster}{Vector of cluster assignments with one value per row of
+`yt`.}
 
-\item{subset}{Optional vector of gene names or indices to subset}
+\item{subset}{Optional vector of gene names or indices to plot. Use `NULL` to
+plot every gene.}
 
-\item{facet_genes}{If TRUE, plots genes in separate facets (default = TRUE)}
+\item{facet_genes}{Logical; if `TRUE`, draw genes in separate facets.}
 
-\item{nrow}{Number of facet rows (if faceted)}
+\item{nrow}{Optional number of facet rows.}
 
-\item{ncol}{Number of facet columns (if faceted)}
+\item{ncol}{Optional number of facet columns.}
 
-\item{legend_dot_size}{Size of legend dots for cluster colors}
+\item{legend_dot_size}{Positive numeric size for points in the cluster legend.}
 }
 \value{
-A ggplot object
+A [ggplot2::ggplot()] object.
 }
 \description{
-Visualizes fitted gene expression trajectories from FPCA alongside observed values, colored by cluster.
+Displays FPCA-fitted trajectories over observed expression values. Points are
+colored by cell cluster, and genes can be faceted or overlaid in one panel.
+}
+\examples{
+\donttest{
+data(scFPCDE_simdata)
+cells <- seq(1, 1000, length.out = 100)
+cells <- unique(round(cells))
+yt <- scale(scFPCDE_simdata$yt[cells, 1:12], center = TRUE, scale = FALSE)
+fit <- scFPCDE_fit_fpca(yt, scFPCDE_simdata$tt[cells], nbasis = 20)
+scFPCDE_gene_curves(
+  tt = scFPCDE_simdata$tt[cells],
+  yt = yt,
+  yt_fit = fit$xt_hat,
+  cell_cluster = scFPCDE_simdata$clusters[cells]
+)
+}
 }

@@ -2,24 +2,46 @@
 % Please edit documentation in R/scFPCDE_D_test.R
 \name{scFPCDE_D_test}
 \alias{scFPCDE_D_test}
-\title{FPCA Distance-Based Permutation Test (D-statistic)}
+\title{Run the FPCA Distance-Based Permutation Test}
 \usage{
 scFPCDE_D_test(yt, tt, fpca_result, n_perm = 1000, ncores = 2)
 }
 \arguments{
-\item{yt}{A matrix of smoothed gene expression values (timepoints × genes).}
+\item{yt}{Numeric centered expression matrix with observations in rows and
+genes in columns.}
 
-\item{tt}{Time vector.}
+\item{tt}{Numeric pseudotime vector with one value per row of `yt`.}
 
-\item{fpca_result}{A list with FPCA results: `$scores` and `$eigenfunctions`.}
+\item{fpca_result}{An FPCA result returned by [scFPCDE_fit_fpca()].}
 
-\item{n_perm}{Number of permutations.}
+\item{n_perm}{Positive integer giving the number of permutations.}
 
-\item{ncores}{Number of parallel cores to use for permutation. Default is 2.}
+\item{ncores}{Positive integer giving the number of parallel workers. Use
+`ncores = 1` for sequential execution.}
 }
 \value{
-A data frame with gene IDs, observed D statistic, p-values, and q-values.
+A data frame with one row per gene and columns `ID`, `D_obs`,
+  `p_value`, and `q_value`. The q-values use the Benjamini-Hochberg method.
 }
 \description{
-Performs a permutation-based D-statistic test using functional PCA scores.
+Computes the squared norm of the FPCA score vector for each gene and compares
+it with the pooled null distribution obtained by permuting expression values
+across pseudotime.
+}
+\details{
+The function uses R's current random-number state. For deterministic results,
+call [set.seed()] and use `ncores = 1`.
+}
+\examples{
+\donttest{
+data(scFPCDE_simdata)
+cells <- seq(1, 1000, length.out = 100)
+cells <- unique(round(cells))
+yt <- scale(scFPCDE_simdata$yt[cells, 1:40], center = TRUE, scale = FALSE)
+tt <- scFPCDE_simdata$tt[cells]
+fit <- scFPCDE_fit_fpca(yt, tt, nbasis = 20)
+set.seed(1)
+test <- scFPCDE_D_test(yt, tt, fit, n_perm = 10, ncores = 1)
+head(test)
+}
 }

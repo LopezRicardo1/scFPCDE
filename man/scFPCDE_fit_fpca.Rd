@@ -2,7 +2,7 @@
 % Please edit documentation in R/scFPCDE_fit_fpca.R
 \name{scFPCDE_fit_fpca}
 \alias{scFPCDE_fit_fpca}
-\title{Fit Functional Principal Component Analysis (FPCA)}
+\title{Fit Functional Principal Component Analysis}
 \usage{
 scFPCDE_fit_fpca(
   yt,
@@ -15,23 +15,54 @@ scFPCDE_fit_fpca(
 )
 }
 \arguments{
-\item{yt}{Matrix of gene expression (rows = timepoints, columns = genes)}
+\item{yt}{Numeric expression matrix with cells or time points in rows and
+genes in columns. Gene names are required as column names.}
 
-\item{tt}{Time vector}
+\item{tt}{Numeric pseudotime vector with one value per row of `yt`.}
 
-\item{L}{Number of principal components (harmonics)}
+\item{L}{Positive integer giving the number of harmonics to retain.}
 
-\item{r_pen}{Smoothing penalty}
+\item{r_pen}{Non-negative smoothing penalty passed to [fda::fdPar()].}
 
-\item{nbasis}{Number of basis functions}
+\item{nbasis}{Integer number of B-spline basis functions; must be at least 4.}
 
-\item{topvarsub}{Optional indices of genes to subset for FPCA basis estimation}
+\item{topvarsub}{Optional gene indices or names used to estimate the FPCA
+eigenfunctions. All genes are still projected onto the fitted basis.}
 
-\item{fpc_varmax}{VARIMAX rotation on FPC eigenfunctions}
+\item{fpc_varmax}{Logical; if `TRUE`, apply VARIMAX rotation to the fitted
+harmonics.}
 }
 \value{
-A list with scores, eigenfunctions, fitted values, and FPCA internals
+A list with components:
+\describe{
+  \item{scores}{A genes-by-`L` matrix of FPCA scores.}
+  \item{eigenfunctions}{An observations-by-`L` matrix of evaluated
+  eigenfunctions.}
+  \item{eigenvals}{The variance of each score dimension across genes.}
+  \item{PEV}{The proportion of variation explained by each harmonic.}
+  \item{sigma2}{Mean squared residual variation across all genes.}
+  \item{xt_hat}{The fitted centered expression matrix.}
+  \item{fda_splines}{The object returned by [fda::smooth.basis()].}
+  \item{fda_fpca}{The fitted object returned by [fda::pca.fd()].}
+  \item{fpc_varmax}{Whether VARIMAX rotation was applied.}
+}
 }
 \description{
-Performs FPCA on smoothed gene expression curves using B-spline basis.
+Smooths centered gene-expression trajectories with a B-spline basis, fits
+functional principal components, and projects every input gene onto the
+estimated eigenfunctions.
+}
+\examples{
+\donttest{
+data(scFPCDE_simdata)
+cells <- seq(1, 1000, length.out = 100)
+cells <- unique(round(cells))
+fit <- scFPCDE_fit_fpca(
+  scFPCDE_simdata$yt[cells, 1:40],
+  scFPCDE_simdata$tt[cells],
+  L = 2,
+  nbasis = 20
+)
+dim(fit$scores)
+}
 }

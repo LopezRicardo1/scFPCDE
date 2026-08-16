@@ -2,18 +2,18 @@
 % Please edit documentation in R/scFPCDE_make_cluster.R
 \name{scFPCDE_make_cluster}
 \alias{scFPCDE_make_cluster}
-\title{Cross-Platform Cluster Creation Helper}
+\title{Create a Cross-Platform Parallel Cluster}
 \usage{
 scFPCDE_make_cluster(ncores = 2)
 }
 \arguments{
-\item{ncores}{Number of cores to use. Default is 2.}
+\item{ncores}{Positive integer giving the number of workers.}
 }
 \value{
-A cluster object from the parallel package.
+A cluster object from [parallel::makeCluster()].
 }
 \description{
-Creates a parallel cluster using `makeForkCluster()` on Unix-like systems and
-`makeCluster()` on Windows for compatibility.
+Internal helper that creates a fork cluster on Unix-like systems and a PSOCK
+cluster on Windows.
 }
 \keyword{internal}

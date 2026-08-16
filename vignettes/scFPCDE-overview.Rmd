@@ -1,8 +1,8 @@
 ---
-title: "scFPCDE-overview"
+title: "Getting Started with scFPCDE"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{scFPCDE-overview}
+  %\VignetteIndexEntry{Getting Started with scFPCDE}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -10,54 +10,157 @@ vignette: >
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#"
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
 )
 ```
 
 ```{r setup}
 library(scFPCDE)
-library(ggplot2)
 ```
 
-## Simulated Example Data
+## Overview
+
+`scFPCDE` tests whether gene-expression trajectories vary along single-cell
+pseudotime. The main workflow smooths centered expression curves with
+functional principal component analysis (FPCA), refines the eigenfunctions
+using genes with the strongest FPCA scores, and evaluates gene-level statistics
+against a pooled permutation distribution.
+
+This vignette uses a small subset of the bundled simulation and only 25
+permutations so that it builds quickly. Analyses intended for inference should
+use substantially more permutations, such as the default `n_perm = 1000`.
+
+## Example data
 
 ```{r simulate}
 data(scFPCDE_simdata)
-yt <- scale(scFPCDE_simdata$yt)
-tt <- scFPCDE_simdata$tt
+
+# Retain 20 DE genes and 40 null genes across 200 cells.
+gene_index <- c(1:20, 101:140)
+cell_index <- seq(1, length(scFPCDE_simdata$tt), length.out = 200)
+cell_index <- unique(round(cell_index))
+
+yt <- scFPCDE_simdata$yt[cell_index, gene_index]
+tt <- scFPCDE_simdata$tt[cell_index]
+clusters <- scFPCDE_simdata$clusters[cell_index]
+
+dim(yt)
+range(tt)
 ```
 
-## Run FPCA-DE Pipeline
+Rows of `yt` are cells and columns are genes. `tt` must contain one finite
+pseudotime value per cell, and gene names must be present and unique. The wrapper
+orders cells by pseudotime and centers genes by default, so the input should not
+be centered a second time before calling the wrapper.
+
+## Optional parameter tuning
+
+`scFPCDE_tune_fpca()` evaluates combinations of B-spline basis sizes and
+smoothing penalties by generalized cross-validation. A representative tuning
+call is shown below. It is not evaluated while building this vignette because a
+larger grid can be computationally expensive.
+
+```{r tune, eval=FALSE}
+tuning <- scFPCDE_tune_fpca(
+  yt = yt,
+  tt = tt,
+  L = 2,
+  nbasis_range = c(20, 30, 40),
+  r_pen_range = c(1e-4, 1e-3, 1e-2),
+  topvarper = 0.25,
+  ncores = 1
+)
+tuning[c("best_nbasis", "best_r_pen", "GCV")]
+```
+
+## Run the FPCA-DE pipeline
+
+Setting `ncores = 1` gives sequential, reproducible execution after
+`set.seed()`. Parallel execution is available by increasing `ncores`.
 
 ```{r run}
-res <- scFPCDE_run(yt, tt)
+set.seed(2026)
+res <- scFPCDE_run(
+  yt = yt,
+  tt = tt,
+  L = 2,
+  nbasis = 30,
+  r_pen = 1e-3,
+  topvarper = 0.25,
+  n_perm = 25,
+  ncores = 1
+)
+
+names(res)
+head(res$D_test_result)
 ```
 
-## P-Value Distribution for D-statistic Test
+The result contains the refined FPCA fit in `fpca_result`, the D-test table in
+`D_test_result`, and `F_test_result`. The last component is `NULL` unless
+`use_FPC_F = TRUE` is requested.
+
+## Inspect differential-expression results
 
 ```{r pval}
-hist(res$D_test$p_value, breaks = 40,
-     main = "P-value Distribution (D-test)",
-     xlab = "P-value", col = "gray")
-```
-
-## Contingency Table of DE Detection vs. Oracle
-
-```{r contingency}
-DE_ids <- rep(c(1, 0), c(100, 400))
-table(DE_ids, res$D_test$p_value < 0.05, 
-      dnn = c("Oracle", "Test Result"))
-```
-
-## Gene Expression Curve Visualization for Top DE Genes
-
-```{r plot}
-top_degs <- order(res$D_test$D_obs, decreasing = TRUE)[1:12]
-scFPCDE_gene_curves(
-  tt = tt,nrow = 3, ncol = 4, 
-  yt = yt,
-  yt_fit = res$fpca_result$xt_hat,
-  cell_cluster = scFPCDE_simdata$clusters,
-  subset = top_degs
+hist(
+  res$D_test_result$p_value,
+  breaks = 20,
+  main = "D-test permutation p-values",
+  xlab = "p-value",
+  col = "grey80",
+  border = "white"
 )
 ```
+
+Because the simulation records which genes are non-null, the discoveries can be
+compared with the known status. In real data, this oracle is unavailable.
+
+```{r contingency}
+is_de <- gene_index <= 100
+names(is_de) <- colnames(yt)
+
+table(
+  Oracle = is_de[res$D_test_result$ID],
+  Significant = res$D_test_result$q_value < 0.05
+)
+```
+
+The optional FPCA F-test is enabled in the wrapper as follows:
+
+```{r f-test, eval=FALSE}
+res_with_f <- scFPCDE_run(
+  yt = yt,
+  tt = tt,
+  n_perm = 1000,
+  ncores = 2,
+  use_FPC_F = TRUE
+)
+head(res_with_f$F_test_result)
+```
+
+## Visualize fitted trajectories
+
+`fpca_result$xt_hat` contains fitted values for the centered expression matrix.
+For a direct overlay, apply the same transformation to the observed values.
+
+```{r plot}
+yt_centered <- scale(yt, center = TRUE, scale = FALSE)
+top_degs <- order(res$D_test_result$D_obs, decreasing = TRUE)[1:12]
+
+scFPCDE_gene_curves(
+  tt = tt,
+  yt = yt_centered,
+  yt_fit = res$fpca_result$xt_hat,
+  cell_cluster = clusters,
+  subset = top_degs,
+  nrow = 3,
+  ncol = 4
+)
+```
+
+For larger analyses, first remove genes with very low detection using
+`scFPCDE_filter_genes()`, tune the smoothing parameters on a representative
+dataset, and save the returned result object together with the random seed and
+package version used for the analysis.

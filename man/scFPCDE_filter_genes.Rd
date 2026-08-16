@@ -2,18 +2,29 @@
 % Please edit documentation in R/scFPCDE_filter_genes.R
 \name{scFPCDE_filter_genes}
 \alias{scFPCDE_filter_genes}
-\title{Gene Filtering by Expression Proportion}
+\title{Filter Genes by Detection Frequency}
 \usage{
 scFPCDE_filter_genes(y, qz = 0.25)
 }
 \arguments{
-\item{y}{A gene expression matrix (cells × genes)}
+\item{y}{Numeric expression matrix with cells in rows and genes in columns.
+Column names are required and are returned for genes that pass the filter.}
 
-\item{qz}{Quantile threshold for filtering (default = 0.25)}
+\item{qz}{Numeric quantile in `[0, 1]` used as the detection-count threshold.}
 }
 \value{
-A character vector of filtered gene names
+A character vector containing the names of genes with detection
+  counts strictly greater than the selected quantile.
 }
 \description{
-Filters genes based on the proportion of non-zero expression values across cells.
+Retains genes whose number of non-zero observations is greater than a
+user-specified quantile of the gene-level detection counts.
+}
+\examples{
+y <- matrix(
+  c(0, 0, 1, 1, 1, 1, 0, 1, 2, 3, 1, 2),
+  nrow = 4,
+  dimnames = list(NULL, c("gene_a", "gene_b", "gene_c"))
+)
+scFPCDE_filter_genes(y, qz = 0.25)
 }

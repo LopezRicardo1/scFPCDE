@@ -2,7 +2,7 @@
 % Please edit documentation in R/scFPCDE_run.R
 \name{scFPCDE_run}
 \alias{scFPCDE_run}
-\title{Run Full scFPCDE Wrapper Pipeline}
+\title{Run the scFPCDE Analysis Pipeline}
 \usage{
 scFPCDE_run(
   yt,
@@ -20,32 +20,67 @@ scFPCDE_run(
 )
 }
 \arguments{
-\item{yt}{Matrix of gene expression (rows = timepoints, columns = genes).}
+\item{yt}{Numeric expression matrix with cells in rows and genes in columns.
+Gene names are required as column names.}
 
-\item{tt}{Time vector.}
+\item{tt}{Numeric pseudotime vector with one value per row of `yt`.}
 
-\item{L}{Number of harmonics (latent dimensions).}
+\item{L}{Positive integer giving the number of harmonics to retain.}
 
-\item{r_pen}{Smoothing penalty.}
+\item{r_pen}{Non-negative smoothing penalty passed to [fda::fdPar()].}
 
-\item{nbasis}{Number of basis functions.}
+\item{nbasis}{Integer number of B-spline basis functions; must be at least 4.}
 
-\item{n_perm}{Number of permutations.}
+\item{n_perm}{Positive integer giving the number of permutations per test.}
 
-\item{topvarper}{Proportion of top variable genes for eigenfunction estimation.}
+\item{topvarper}{Proportion in `(0, 1]` of genes used to refine the FPCA
+eigenfunctions.}
 
-\item{center}{Logical; center each gene across time (default = TRUE).}
+\item{center}{Logical; center each gene before fitting.}
 
-\item{scale}{Logical; scale each gene to unit variance across time (default = FALSE).}
+\item{scale}{Logical; scale each gene to unit variance before fitting.}
 
-\item{ncores}{Number of parallel cores to use for permutation tests. Default is 2.}
+\item{ncores}{Positive integer giving the number of parallel workers. Use
+`ncores = 1` for sequential execution.}
 
-\item{use_FPC_F}{Logical; whether to run the FPCA-based F-test. Default is FALSE.}
+\item{use_FPC_F}{Logical; if `TRUE`, also run [scFPCDE_F_test()].}
+
+\item{fpc_varmax}{Logical; if `TRUE`, apply VARIMAX rotation to FPCA
+harmonics in both fitting steps.}
 }
 \value{
-A list with FPCA result, D-test, and optionally F-test results.
+A list with components:
+\describe{
+  \item{fpca_result}{The refined result from [scFPCDE_fit_fpca()].}
+  \item{D_test_result}{The data frame returned by [scFPCDE_D_test()].}
+  \item{F_test_result}{The data frame returned by [scFPCDE_F_test()] when
+  `use_FPC_F = TRUE`; otherwise `NULL`.}
+}
 }
 \description{
-Wrapper function to run the full scFPCDE workflow: smoothing with FPCA,
-basis refinement via top-variance filtering, and permutation tests.
+Runs the complete workflow: ordering observations by pseudotime, centering or
+scaling expression, estimating an initial FPCA basis, refining the basis with
+the strongest gene trajectories, and applying permutation tests.
+}
+\details{
+The fitted values in `fpca_result$xt_hat` correspond to the centered or
+scaled matrix used internally. For deterministic permutations, call
+[set.seed()] and use `ncores = 1`.
+}
+\examples{
+\donttest{
+data(scFPCDE_simdata)
+cells <- seq(1, 1000, length.out = 100)
+cells <- unique(round(cells))
+genes <- c(1:20, 101:120)
+set.seed(1)
+result <- scFPCDE_run(
+  scFPCDE_simdata$yt[cells, genes],
+  scFPCDE_simdata$tt[cells],
+  nbasis = 20,
+  n_perm = 10,
+  ncores = 1
+)
+head(result$D_test_result)
+}
 }

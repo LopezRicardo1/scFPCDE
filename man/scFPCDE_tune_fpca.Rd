@@ -2,7 +2,7 @@
 % Please edit documentation in R/scFPCDE_tune_fpca.R
 \name{scFPCDE_tune_fpca}
 \alias{scFPCDE_tune_fpca}
-\title{Tune FPCA Parameters via Generalized Cross-Validation (GCV)}
+\title{Tune FPCA Smoothing Parameters by Generalized Cross-Validation}
 \usage{
 scFPCDE_tune_fpca(
   yt,
@@ -10,25 +10,50 @@ scFPCDE_tune_fpca(
   L = 3,
   r_pen_range = exp(-5:1),
   nbasis_range = 1:5 * 20,
-  topvarper = 0.1
+  topvarper = 0.1,
+  ncores = 2
 )
 }
 \arguments{
-\item{yt}{Gene expression matrix (timepoints × genes)}
+\item{yt}{Numeric expression matrix with observations in rows and genes in
+columns.}
 
-\item{tt}{Time vector}
+\item{tt}{Numeric pseudotime vector with one value per row of `yt`.}
 
-\item{L}{Number of harmonics to retain}
+\item{L}{Positive integer giving the number of harmonics to retain.}
 
-\item{r_pen_range}{Vector of smoothing penalties}
+\item{r_pen_range}{Numeric vector of non-negative smoothing penalties.}
 
-\item{nbasis_range}{Vector of number of basis functions}
+\item{nbasis_range}{Integer vector of B-spline basis sizes, each at least 4.}
 
-\item{topvarper}{Proportion of top signal genes used for tuning}
+\item{topvarper}{Proportion in `(0, 1]` of genes used for tuning.}
+
+\item{ncores}{Positive integer giving the number of parallel workers. Use
+`ncores = 1` for sequential execution.}
 }
 \value{
-A list with optimal parameters and full GCV results
+A list containing the selected `best_L`, `best_nbasis`, and
+  `best_r_pen`, the minimum `GCV`, the vector `GCV_results`, and the evaluated
+  `parameter_grid`.
 }
 \description{
-Optimizes smoothing parameters for FPCA using GCV on top signal curves.
+Evaluates a grid of smoothing penalties and B-spline basis sizes using mean
+generalized cross-validation (GCV) over genes selected from an initial FPCA
+fit.
+}
+\examples{
+\donttest{
+data(scFPCDE_simdata)
+cells <- seq(1, 1000, length.out = 100)
+cells <- unique(round(cells))
+tuning <- scFPCDE_tune_fpca(
+  scFPCDE_simdata$yt[cells, 1:40],
+  scFPCDE_simdata$tt[cells],
+  L = 2,
+  r_pen_range = c(1e-3, 1e-2),
+  nbasis_range = c(15, 20),
+  ncores = 1
+)
+tuning[c("best_nbasis", "best_r_pen", "GCV")]
+}
 }
