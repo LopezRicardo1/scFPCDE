@@ -45,13 +45,14 @@ The main functions form one workflow:
 ```{r function-map, echo=FALSE}
 function_map <- data.frame(
   Step = c(
-    "1. Filter", "2. Tune", "3. Fit", "4. Test", "5. Visualize"
+    "1. Filter", "2. Tune", "3. Fit", "4. Test", "5. Explore", "6. Visualize"
   ),
   Function = c(
     "scFPCDE_filter_genes()",
     "scFPCDE_tune_fpca()",
     "scFPCDE_fit_fpca() or scFPCDE_run()",
     "scFPCDE_D_test() and scFPCDE_F_test()",
+    "scFPCDE_fpc_scores()",
     "scFPCDE_gene_curves()"
   ),
   Purpose = c(
@@ -59,6 +60,7 @@ function_map <- data.frame(
     "Choose spline-basis size and roughness penalty by GCV",
     "Estimate smooth trajectories and shared FPCs",
     "Evaluate gene-level evidence against a permutation null",
+    "Extract, select, or transform gene-level FPC scores",
     "Compare observed expression with fitted trajectories"
   ),
   check.names = FALSE
@@ -381,30 +383,79 @@ legend(
 )
 ```
 
-The score plot shows how the known signal genes separate from null genes in the
-retained functional space. In real data, colors would instead represent an
-external annotation or a significance category.
+## Extracting and transforming FPC scores
 
-```{r score-space, fig.cap="Known signal genes extend away from the concentrated null genes in the retained FPCA score space."}
-scores <- result$fpca_result$scores
-score_truth <- known_signal[rownames(scores)]
+`scFPCDE_fpc_scores()` provides one consistent way to retrieve scores from
+either `scFPCDE_fit_fpca()` or `scFPCDE_run()`. Raw scores must be used to
+calculate the D-statistic, permutation null, distances, or score-space
+boundaries. Two optional transformations are useful for visualization:
+
+- `transform = "signed_log10"` applies
+  $\operatorname{sign}(x)\log_{10}(1 + |x|/s)$. It preserves zero, sign, and
+  score-space quadrant while compressing extreme values. `log_scale = 1`
+  exactly reproduces the manuscript plotting transformation.
+- `transform = "standardize"` centers every selected FPC and divides by its
+  sample standard deviation. This puts components on comparable visual scales,
+  but distances are then expressed in standard-deviation units rather than the
+  fitted FPCA units.
+
+```{r transform-scores}
+scores_raw <- scFPCDE_fpc_scores(result, components = 1:2)
+scores_log <- scFPCDE_fpc_scores(
+  result,
+  components = 1:2,
+  transform = "signed_log10"
+)
+scores_z <- scFPCDE_fpc_scores(
+  result,
+  components = c("FPC1", "FPC2"),
+  transform = "standardize"
+)
+
+data.frame(
+  Scale = c("Raw", "Signed log10", "Standardized"),
+  FPC1_min = c(min(scores_raw[, 1]), min(scores_log[, 1]), min(scores_z[, 1])),
+  FPC1_max = c(max(scores_raw[, 1]), max(scores_log[, 1]), max(scores_z[, 1]))
+)
+```
+
+The three panels below contain the same genes. Compression makes the central
+score cloud easier to see when a few genes have extreme coordinates, whereas
+standardization makes variation along FPC1 and FPC2 visually comparable. In
+this known-truth example, orange marks signal genes and grey marks null genes.
+In real data, colors could instead represent a significance category or
+external gene annotation.
+
+```{r score-space, fig.width=7.5, fig.height=3.2, fig.cap="Raw, signed-log10-compressed, and standardized views of the same gene-level FPC scores. Transformations change only the display coordinates."}
+score_truth <- known_signal[rownames(scores_raw)]
 score_colors <- ifelse(score_truth, "#D55E00", "grey72")
 
-plot(
-  scores[, 1], scores[, 2],
-  pch = 16,
-  cex = 0.85,
-  col = score_colors,
-  xlab = "FPC1 gene score",
-  ylab = "FPC2 gene score",
-  main = "Genes in FPCA score space"
+old_par <- par(mfrow = c(1, 3), mar = c(4.1, 4.1, 2.6, 0.8))
+score_views <- list(
+  Raw = scores_raw,
+  `Signed log10` = scores_log,
+  Standardized = scores_z
 )
-abline(h = 0, v = 0, lty = 3, col = "grey60")
+for (view_name in names(score_views)) {
+  score_view <- score_views[[view_name]]
+  plot(
+    score_view[, 1], score_view[, 2],
+    pch = 16,
+    cex = 0.72,
+    col = score_colors,
+    xlab = "FPC1",
+    ylab = "FPC2",
+    main = view_name
+  )
+  abline(h = 0, v = 0, lty = 3, col = "grey60")
+}
+par(old_par)
 legend(
-  "topright",
+  "top",
   legend = c("Known signal", "Known null"),
   col = c("#D55E00", "grey72"),
   pch = 16,
+  horiz = TRUE,
   bty = "n"
 )
 ```
@@ -623,6 +674,14 @@ analysis <- scFPCDE_run(
   n_perm = 1000,
   ncores = 1,
   use_FPC_F = TRUE
+)
+
+# Use raw scores for inference and transformed scores only for display.
+scores_raw <- scFPCDE_fpc_scores(analysis, transform = "none")
+scores_for_plot <- scFPCDE_fpc_scores(
+  analysis,
+  components = 1:2,
+  transform = "signed_log10"
 )
 
 significant_genes <- subset(

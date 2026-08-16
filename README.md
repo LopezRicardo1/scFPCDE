@@ -42,6 +42,11 @@ res <- scFPCDE_run(
 )
 
 head(res$D_test_result)
+scores_for_plot <- scFPCDE_fpc_scores(
+  res,
+  components = 1:2,
+  transform = "signed_log10"
+)
 hist(
   res$D_test_result$p_value,
   breaks = 20,
@@ -67,6 +72,10 @@ scFPCDE_gene_curves(
 - `D_test_result`: gene-level D statistics, p-values, and BH-adjusted q-values;
 - `F_test_result`: gene-level F-test results when `use_FPC_F = TRUE`, otherwise
   `NULL`.
+
+Use `scFPCDE_fpc_scores()` to extract raw gene-level FPC scores or create
+signed-log10-compressed and standardized coordinates for visualization. Keep
+the raw scores for inference, distance calculations, and null boundaries.
 
 See `vignette("scFPCDE-overview")` for a guided workflow and the function help
 pages for parameter details.
