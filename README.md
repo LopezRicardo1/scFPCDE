@@ -18,9 +18,9 @@ remotes::install_github("NLM-DIR/scFPCDE", build_vignettes = TRUE)
 ## Quick start
 
 The bundled simulation contains 1,000 cells and 500 genes. For a quick example,
-the code below uses 20 differentially expressed genes and 40 null genes and a
-small number of permutations. Increase `n_perm` for an analysis intended for
-inference.
+the code below uses 20 differentially expressed genes, 40 null genes, and 100
+permutations. Increase `n_perm` to at least 1,000 for an analysis intended for
+inference and examine stability across random seeds.
 
 ```r
 library(scFPCDE)
@@ -37,7 +37,7 @@ set.seed(2026)
 res <- scFPCDE_run(
   yt = yt,
   tt = tt,
-  n_perm = 25,
+  n_perm = 100,
   ncores = 1
 )
 
@@ -54,7 +54,10 @@ scFPCDE_gene_curves(
   yt = scale(yt, center = TRUE, scale = FALSE),
   yt_fit = res$fpca_result$xt_hat,
   cell_cluster = scFPCDE_simdata$clusters[cell_index],
-  subset = order(res$D_test_result$D_obs, decreasing = TRUE)[1:12]
+  subset = order(res$D_test_result$D_obs, decreasing = TRUE)[1:12],
+  point_size = 0.45,
+  point_alpha = 0.55,
+  curve_linewidth = 0.9
 )
 ```
 

@@ -13,7 +13,14 @@ scFPCDE_gene_curves(
   facet_genes = TRUE,
   nrow = 4,
   ncol = 3,
-  legend_dot_size = 3
+  legend_dot_size = 3,
+  point_size = 0.45,
+  point_alpha = 0.55,
+  curve_linewidth = 0.9,
+  curve_color = "black",
+  cluster_colors = NULL,
+  scales = "free_y",
+  title = NULL
 )
 }
 \arguments{
@@ -39,13 +46,38 @@ plot every gene.}
 \item{ncol}{Optional number of facet columns.}
 
 \item{legend_dot_size}{Positive numeric size for points in the cluster legend.}
+
+\item{point_size}{Positive numeric size for observed-expression points.}
+
+\item{point_alpha}{Numeric transparency for observed-expression points in
+`[0, 1]`.}
+
+\item{curve_linewidth}{Positive numeric width for fitted trajectories.}
+
+\item{curve_color}{Color used for fitted trajectories.}
+
+\item{cluster_colors}{Optional vector of colors for cell clusters. A named
+vector is matched to cluster labels; an unnamed vector is used in cluster
+level order.}
+
+\item{scales}{Facet scale behavior passed to [ggplot2::facet_wrap()]. One of
+`"free_y"`, `"fixed"`, `"free"`, or `"free_x"`.}
+
+\item{title}{Optional plot title. Use `NULL` for a context-specific default.}
 }
 \value{
 A [ggplot2::ggplot()] object.
 }
 \description{
-Displays FPCA-fitted trajectories over observed expression values. Points are
-colored by cell cluster, and genes can be faceted or overlaid in one panel.
+Displays FPCA-fitted trajectories over observed expression values. Observed
+cells are colored by cluster and fitted trajectories are drawn as cohesive
+curves. Genes can be faceted or overlaid in one panel.
+}
+\details{
+All rows of `tt`, `yt`, `yt_fit`, and `cell_cluster` must describe the same
+observations in the same order. The function orders these inputs together by
+pseudotime before plotting. Duplicate gene names are disambiguated in facet
+labels with [make.unique()].
 }
 \examples{
 \donttest{
@@ -58,7 +90,9 @@ scFPCDE_gene_curves(
   tt = scFPCDE_simdata$tt[cells],
   yt = yt,
   yt_fit = fit$xt_hat,
-  cell_cluster = scFPCDE_simdata$clusters[cells]
+  cell_cluster = scFPCDE_simdata$clusters[cells],
+  point_size = 0.5,
+  point_alpha = 0.6
 )
 }
 }

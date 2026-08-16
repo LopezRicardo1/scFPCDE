@@ -16,10 +16,7 @@ Imports:
     parallel,
     fda,
     stats,
-    ggplot2,
-    dplyr,
-    tidyr,
-    magrittr
+    ggplot2
 RoxygenNote: 7.3.3
 Suggests: 
     knitr,

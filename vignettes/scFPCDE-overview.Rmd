@@ -1,8 +1,12 @@
 ---
-title: "Getting Started with scFPCDE"
-output: rmarkdown::html_vignette
+title: "A Practical scFPCDE Workflow"
+subtitle: "From expression filtering to FPCA tuning and permutation inference"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
 vignette: >
-  %\VignetteIndexEntry{Getting Started with scFPCDE}
+  %\VignetteIndexEntry{A Practical scFPCDE Workflow}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -12,155 +16,648 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
-  fig.height = 5
+  fig.height = 4.8,
+  fig.align = "center",
+  dpi = 96
 )
+options(width = 90)
 ```
 
 ```{r setup}
 library(scFPCDE)
+set.seed(2026)
 ```
 
-## Overview
+# What scFPCDE does
 
-`scFPCDE` tests whether gene-expression trajectories vary along single-cell
-pseudotime. The main workflow smooths centered expression curves with
-functional principal component analysis (FPCA), refines the eigenfunctions
-using genes with the strongest FPCA scores, and evaluates gene-level statistics
-against a pooled permutation distribution.
+`scFPCDE` identifies genes whose expression functions vary along single-cell
+pseudotime. It treats the collection of gene trajectories as functional data,
+estimates a shared functional principal component analysis (FPCA) basis, and
+uses gene-level FPCA scores to construct permutation tests.
 
-This vignette uses a small subset of the bundled simulation and only 25
-permutations so that it builds quickly. Analyses intended for inference should
-use substantially more permutations, such as the default `n_perm = 1000`.
+The package is most useful after a trajectory or lineage has already been
+defined. It does **not** infer pseudotime, select a lineage, normalize counts, or
+correct batch effects. Those steps should be completed before the expression
+matrix and pseudotime vector are supplied to `scFPCDE`.
 
-## Example data
+The main functions form one workflow:
 
-```{r simulate}
+```{r function-map, echo=FALSE}
+function_map <- data.frame(
+  Step = c(
+    "1. Filter", "2. Tune", "3. Fit", "4. Test", "5. Visualize"
+  ),
+  Function = c(
+    "scFPCDE_filter_genes()",
+    "scFPCDE_tune_fpca()",
+    "scFPCDE_fit_fpca() or scFPCDE_run()",
+    "scFPCDE_D_test() and scFPCDE_F_test()",
+    "scFPCDE_gene_curves()"
+  ),
+  Purpose = c(
+    "Remove genes with low detection frequency",
+    "Choose spline-basis size and roughness penalty by GCV",
+    "Estimate smooth trajectories and shared FPCs",
+    "Evaluate gene-level evidence against a permutation null",
+    "Compare observed expression with fitted trajectories"
+  ),
+  check.names = FALSE
+)
+knitr::kable(function_map, align = c("l", "l", "l"))
+```
+
+`scFPCDE_run()` is the recommended high-level entry point. It orders cells by
+pseudotime, preprocesses expression, fits an initial FPCA model, refines the
+eigenfunctions using genes with the strongest scores, and runs the requested
+permutation tests.
+
+# Input contract
+
+The required inputs are:
+
+- `yt`: a finite numeric matrix with **cells in rows** and **genes in columns**;
+- `tt`: one finite pseudotime value per row of `yt`; and
+- gene identifiers in `colnames(yt)`.
+
+Pseudotime can use any finite scale. The methods depend on its ordering and
+relative spacing, not on a specific range. Missing values should be resolved
+before fitting. The same biological lineage should not contain unrelated cells
+whose pseudotime values are not comparable.
+
+Important modeling choices are:
+
+- `center = TRUE` removes each gene's mean and focuses the analysis on shape;
+- `scale = TRUE` additionally gives genes unit variance, which can make weak and
+  strong genes contribute more equally;
+- `L` is the number of functional principal components retained;
+- `nbasis` controls the maximum flexibility of the B-spline representation;
+- `r_pen` penalizes curvature, with larger values producing smoother fits;
+- `topvarper` is the proportion of high-score genes used to refine the shared
+  eigenfunctions; and
+- `fpc_varmax = TRUE` rotates the retained FPCs for interpretability without
+  changing their retained subspace.
+
+# A known-truth example
+
+The bundled `scFPCDE_simdata` object contains 1,000 cells and 500 genes. Genes
+1--100 were generated with pseudotime-dependent trajectories, while genes
+101--500 are null. This known status lets us demonstrate a compact
+single-dataset simulation evaluation. It is useful for learning the workflow,
+but it is not a claim about performance across all data-generating mechanisms.
+
+```{r data}
 data(scFPCDE_simdata)
 
-# Retain 20 DE genes and 40 null genes across 200 cells.
-gene_index <- c(1:20, 101:140)
-cell_index <- seq(1, length(scFPCDE_simdata$tt), length.out = 200)
-cell_index <- unique(round(cell_index))
+# Use 180 cells, 30 known signals, and 70 known null genes.
+cell_index <- unique(round(seq(
+  1, length(scFPCDE_simdata$tt), length.out = 180
+)))
+gene_index <- c(1:30, 101:170)
 
-yt <- scFPCDE_simdata$yt[cell_index, gene_index]
+yt <- scFPCDE_simdata$yt[cell_index, gene_index, drop = FALSE]
 tt <- scFPCDE_simdata$tt[cell_index]
-clusters <- scFPCDE_simdata$clusters[cell_index]
+cell_cluster <- scFPCDE_simdata$clusters[cell_index]
 
-dim(yt)
-range(tt)
+known_signal <- setNames(gene_index <= 100, colnames(yt))
+
+data.frame(
+  Cells = nrow(yt),
+  Genes = ncol(yt),
+  Known_signals = sum(known_signal),
+  Known_nulls = sum(!known_signal),
+  Pseudotime_min = min(tt),
+  Pseudotime_max = max(tt)
+)
 ```
 
-Rows of `yt` are cells and columns are genes. `tt` must contain one finite
-pseudotime value per cell, and gene names must be present and unique. The wrapper
-orders cells by pseudotime and centers genes by default, so the input should not
-be centered a second time before calling the wrapper.
+The selected cells are already ordered by pseudotime. `scFPCDE_run()` also
+orders its inputs internally, so an unsorted input is acceptable.
 
-## Optional parameter tuning
+# Filtering low-detection genes
 
-`scFPCDE_tune_fpca()` evaluates combinations of B-spline basis sizes and
-smoothing penalties by generalized cross-validation. A representative tuning
-call is shown below. It is not evaluated while building this vignette because a
-larger grid can be computationally expensive.
+`scFPCDE_filter_genes()` counts the nonzero observations for each gene and
+retains genes above a user-specified quantile of those counts. It is intended
+for sparse count-like or log-expression matrices with heterogeneous detection.
 
-```{r tune, eval=FALSE}
+The bundled simulation is continuous and contains no zeros. To demonstrate the
+filter without pretending otherwise, the next chunk creates a documented
+didactic copy in which 20 null genes are observed in only 10 cells. The
+original, unmodified simulation is used for the FPCA analysis that follows.
+
+```{r filtering}
+yt_sparse_demo <- yt
+sparse_gene_columns <- 81:100
+
+yt_sparse_demo[, sparse_gene_columns] <- 0
+yt_sparse_demo[1:10, sparse_gene_columns] <-
+  yt[1:10, sparse_gene_columns]
+
+detection_count <- colSums(yt_sparse_demo != 0)
+filter_quantile <- 0.20
+detection_threshold <- unname(quantile(detection_count, filter_quantile))
+
+genes_kept <- scFPCDE_filter_genes(
+  yt_sparse_demo,
+  qz = filter_quantile
+)
+
+data.frame(
+  Input_genes = ncol(yt_sparse_demo),
+  Detection_threshold = detection_threshold,
+  Retained_genes = length(genes_kept),
+  Removed_genes = ncol(yt_sparse_demo) - length(genes_kept)
+)
+```
+
+```{r filtering-plot, fig.cap="Genes above the detection-count quantile are retained for downstream analysis."}
+sorted_detection <- sort(unname(detection_count))
+barplot(
+  sorted_detection,
+  names.arg = rep("", length(sorted_detection)),
+  border = NA,
+  col = ifelse(sorted_detection > detection_threshold,
+               "#2C7FB8", "grey75"),
+  xlab = "Genes ordered by detection count",
+  ylab = "Cells with nonzero expression",
+  main = "Quantile-based detection filter"
+)
+abline(h = detection_threshold, lty = 2, lwd = 2, col = "#D95F02")
+legend(
+  "topleft",
+  legend = c("Retained", "Removed", "Threshold"),
+  fill = c("#2C7FB8", "grey75", NA),
+  border = c(NA, NA, NA),
+  lty = c(NA, NA, 2),
+  col = c(NA, NA, "#D95F02"),
+  bty = "o",
+  bg = "white",
+  box.col = "grey85",
+  cex = 0.9
+)
+```
+
+In a real workflow, the filtered matrix would be constructed with:
+
+```{r filtered-matrix}
+yt_filtered <- yt_sparse_demo[, genes_kept, drop = FALSE]
+dim(yt_filtered)
+```
+
+If every gene is detected in exactly the same number of cells, a strict
+quantile filter cannot distinguish genes and should be skipped. Filtering also
+changes the multiple-testing universe, so its rule should be chosen before
+examining gene-level p-values.
+
+# Tuning the spline basis and roughness penalty
+
+Two parameters work together to determine trajectory smoothness:
+
+- `nbasis` is the number of B-spline basis functions. A larger value permits
+  more local variation but does not force a wiggly result.
+- `r_pen` is the penalty on the integrated squared second derivative. A larger
+  penalty suppresses curvature and favors smoother trajectories.
+
+`scFPCDE_tune_fpca()` evaluates their combinations by mean generalized
+cross-validation (GCV). Lower GCV indicates a better balance between fit and
+smoothness for the genes used during tuning.
+
+For reproducibility, this vignette uses sequential evaluation. The grid is
+small enough for package checks but spans several orders of magnitude in the
+roughness penalty.
+
+```{r tune}
+nbasis_grid <- c(8, 12, 18, 24)
+roughness_grid <- c(1e-6, 1e-5, 1e-4, 1e-3)
+
 tuning <- scFPCDE_tune_fpca(
   yt = yt,
   tt = tt,
   L = 2,
-  nbasis_range = c(20, 30, 40),
-  r_pen_range = c(1e-4, 1e-3, 1e-2),
+  nbasis_range = nbasis_grid,
+  r_pen_range = roughness_grid,
   topvarper = 0.25,
   ncores = 1
 )
-tuning[c("best_nbasis", "best_r_pen", "GCV")]
+
+tuning_table <- transform(
+  tuning$parameter_grid,
+  Mean_GCV = tuning$GCV_results,
+  Roughness_penalty = factor(
+    format(r_pen, scientific = TRUE),
+    levels = format(roughness_grid, scientific = TRUE)
+  )
+)
+
+knitr::kable(
+  tuning_table[, c("nbasis", "r_pen", "Mean_GCV")],
+  digits = c(0, 6, 6),
+  col.names = c("B-spline basis functions", "Roughness penalty", "Mean GCV")
+)
 ```
 
-## Run the FPCA-DE pipeline
+```{r tuning-plot, fig.cap="Mean generalized cross-validation across the candidate basis sizes and roughness penalties."}
+ggplot2::ggplot(
+  tuning_table,
+  ggplot2::aes(
+    x = factor(nbasis),
+    y = Roughness_penalty,
+    fill = Mean_GCV
+  )
+) +
+  ggplot2::geom_tile(color = "white", linewidth = 0.8) +
+  ggplot2::geom_text(
+    ggplot2::aes(label = format(Mean_GCV, digits = 3)),
+    size = 3
+  ) +
+  ggplot2::scale_fill_viridis_c(option = "C", direction = -1) +
+  ggplot2::labs(
+    x = "B-spline basis functions",
+    y = "Roughness penalty",
+    fill = "Mean GCV",
+    title = "FPCA tuning surface"
+  ) +
+  ggplot2::theme_bw(base_size = 11) +
+  ggplot2::theme(panel.grid = ggplot2::element_blank())
+```
 
-Setting `ncores = 1` gives sequential, reproducible execution after
-`set.seed()`. Parallel execution is available by increasing `ncores`.
+```{r selected-tuning}
+data.frame(
+  L = tuning$best_L,
+  nbasis = tuning$best_nbasis,
+  r_pen = tuning$best_r_pen,
+  Mean_GCV = tuning$GCV
+)
+```
+
+The selected basis size lies on the lower edge of this compact teaching grid.
+For a final analysis, an optimum on any grid boundary is a reason to expand the
+grid in that direction and check whether the choice is stable. The grid should
+also be revisited when the lineage, normalization, or cell density changes.
+
+`L` is intentionally specified rather than selected by GCV. Two or three FPCs
+are common starting points. Increase `L` only when additional components explain
+meaningful structured variation and yield stable results; excessive harmonics
+can model noise.
+
+# Run the complete pipeline with 100 permutations
+
+The next call uses the tuned parameters and runs both available test
+statistics. One hundred permutations provide a meaningful, quick tutorial.
+Final inferential analyses should normally use at least 1,000 permutations and
+should examine stability across random seeds.
+
+`ncores = 1` makes the seeded permutation sequence reproducible across the
+platforms used to build this vignette. Parallel execution can be enabled for a
+large analysis, but its random-number behavior should be recorded and checked.
 
 ```{r run}
 set.seed(2026)
-res <- scFPCDE_run(
+
+result <- scFPCDE_run(
   yt = yt,
   tt = tt,
-  L = 2,
-  nbasis = 30,
-  r_pen = 1e-3,
+  L = tuning$best_L,
+  nbasis = tuning$best_nbasis,
+  r_pen = tuning$best_r_pen,
   topvarper = 0.25,
-  n_perm = 25,
-  ncores = 1
+  center = TRUE,
+  scale = FALSE,
+  n_perm = 100,
+  ncores = 1,
+  use_FPC_F = TRUE,
+  fpc_varmax = TRUE
 )
 
-names(res)
-head(res$D_test_result)
+names(result)
 ```
 
-The result contains the refined FPCA fit in `fpca_result`, the D-test table in
-`D_test_result`, and `F_test_result`. The last component is `NULL` unless
-`use_FPC_F = TRUE` is requested.
+The two gene-level tests answer related questions:
 
-## Inspect differential-expression results
+- The **D-statistic** is the squared norm of a gene's retained FPCA scores. It
+  measures how far the fitted trajectory lies from the null origin in the
+  retained score space.
+- The **F-statistic** compares residual variation under the null and FPCA
+  models. It asks whether the fitted functional representation improves on the
+  null model.
 
-```{r pval}
+Both result tables report raw permutation `p_value` and Benjamini--Hochberg
+`q_value`. The q-values should be used when controlling false discoveries over
+the tested genes.
+
+# Inspect the fitted FPCA representation
+
+The refined `fpca_result` stores gene scores, evaluated eigenfunctions, fitted
+expression, variance proportions, and underlying `fda` objects.
+
+```{r fpca-components}
+fpca_summary <- data.frame(
+  Component = paste0("FPC", seq_along(result$fpca_result$PEV)),
+  Proportion = result$fpca_result$PEV,
+  Cumulative = cumsum(result$fpca_result$PEV)
+)
+knitr::kable(fpca_summary, digits = 3)
+```
+
+```{r eigenfunctions, fig.cap="The two retained eigenfunctions describe the dominant trajectory shapes shared across genes."}
+matplot(
+  tt,
+  result$fpca_result$eigenfunctions,
+  type = "l",
+  lty = 1,
+  lwd = 2.2,
+  col = c("#0072B2", "#D55E00"),
+  xlab = "Pseudotime",
+  ylab = "Eigenfunction value",
+  main = "Retained functional principal components"
+)
+abline(h = 0, lty = 3, col = "grey65")
+legend(
+  "topright",
+  legend = paste0("FPC", seq_len(ncol(result$fpca_result$eigenfunctions))),
+  col = c("#0072B2", "#D55E00"),
+  lty = 1,
+  lwd = 2.2,
+  bty = "n"
+)
+```
+
+The score plot shows how the known signal genes separate from null genes in the
+retained functional space. In real data, colors would instead represent an
+external annotation or a significance category.
+
+```{r score-space, fig.cap="Known signal genes extend away from the concentrated null genes in the retained FPCA score space."}
+scores <- result$fpca_result$scores
+score_truth <- known_signal[rownames(scores)]
+score_colors <- ifelse(score_truth, "#D55E00", "grey72")
+
+plot(
+  scores[, 1], scores[, 2],
+  pch = 16,
+  cex = 0.85,
+  col = score_colors,
+  xlab = "FPC1 gene score",
+  ylab = "FPC2 gene score",
+  main = "Genes in FPCA score space"
+)
+abline(h = 0, v = 0, lty = 3, col = "grey60")
+legend(
+  "topright",
+  legend = c("Known signal", "Known null"),
+  col = c("#D55E00", "grey72"),
+  pch = 16,
+  bty = "n"
+)
+```
+
+# Mini simulation evaluation
+
+Attach the known status only for this simulation and rank genes by the D-test.
+This is an oracle evaluation: a real dataset never supplies `Known_signal`.
+
+```{r result-table}
+d_result <- transform(
+  result$D_test_result,
+  Known_signal = unname(known_signal[ID])
+)
+d_result <- d_result[order(
+  d_result$q_value,
+  d_result$p_value,
+  -d_result$D_obs
+), ]
+
+knitr::kable(
+  head(d_result, 12),
+  digits = c(NA, 3, 4, 4, NA),
+  row.names = FALSE,
+  caption = "Top genes ranked by the scFPCDE D-test"
+)
+```
+
+```{r method-summary}
+summarize_test <- function(test_result, statistic_name) {
+  truth <- unname(known_signal[test_result$ID])
+  discovered <- test_result$q_value < 0.05
+  true_positive <- sum(discovered & truth)
+  false_positive <- sum(discovered & !truth)
+
+  data.frame(
+    Test = statistic_name,
+    Discoveries = sum(discovered),
+    True_positives = true_positive,
+    False_positives = false_positive,
+    Sensitivity = true_positive / sum(truth),
+    Empirical_FDR = false_positive / max(1, sum(discovered))
+  )
+}
+
+simulation_summary <- rbind(
+  summarize_test(result$D_test_result, "D-statistic"),
+  summarize_test(result$F_test_result, "F-statistic")
+)
+
+knitr::kable(
+  simulation_summary,
+  digits = c(NA, 0, 0, 0, 3, 3),
+  row.names = FALSE,
+  caption = "Known-truth summary at q-value < 0.05"
+)
+```
+
+```{r pvalue-distributions, fig.width=7, fig.height=3.6, fig.cap="Permutation p-value distributions for the D- and F-statistics."}
+old_par <- par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
 hist(
-  res$D_test_result$p_value,
-  breaks = 20,
-  main = "D-test permutation p-values",
-  xlab = "p-value",
-  col = "grey80",
-  border = "white"
+  result$D_test_result$p_value,
+  breaks = seq(0, 1, length.out = 21),
+  col = "#9ECAE1",
+  border = "white",
+  main = "D-test",
+  xlab = "Permutation p-value"
 )
+hist(
+  result$F_test_result$p_value,
+  breaks = seq(0, 1, length.out = 21),
+  col = "#FDD0A2",
+  border = "white",
+  main = "F-test",
+  xlab = "Permutation p-value"
+)
+par(old_par)
 ```
 
-Because the simulation records which genes are non-null, the discoveries can be
-compared with the known status. In real data, this oracle is unavailable.
+Here, the D-test recovers most known signals and the F-test recovers all of them
+without selecting a known null in this one subset. These numbers should not be
+generalized beyond this demonstration. A formal simulation study would repeat
+many independently generated datasets across sample sizes, signal shapes,
+dropout levels, and pseudotime uncertainty.
 
-```{r contingency}
-is_de <- gene_index <= 100
-names(is_de) <- colnames(yt)
+# Plot observed and fitted gene trajectories
 
-table(
-  Oracle = is_de[res$D_test_result$ID],
-  Significant = res$D_test_result$q_value < 0.05
-)
-```
+`scFPCDE_run()` centers genes internally by default, so the observations passed
+to `scFPCDE_gene_curves()` should receive the same transformation. Because this
+example's cells were selected in increasing pseudotime order, the fitted and
+observed rows are already aligned.
 
-The optional FPCA F-test is enabled in the wrapper as follows:
+The plot below combines four high-ranking known signals with two of the
+highest-ranking known nulls. This makes both clear functional structure and
+near-null behavior visible.
 
-```{r f-test, eval=FALSE}
-res_with_f <- scFPCDE_run(
-  yt = yt,
-  tt = tt,
-  n_perm = 1000,
-  ncores = 2,
-  use_FPC_F = TRUE
-)
-head(res_with_f$F_test_result)
-```
-
-## Visualize fitted trajectories
-
-`fpca_result$xt_hat` contains fitted values for the centered expression matrix.
-For a direct overlay, apply the same transformation to the observed values.
-
-```{r plot}
+```{r gene-curves, fig.width=8, fig.height=5.8, fig.cap="Observed centered expression and FPCA-fitted curves for four known signals and two known null genes."}
 yt_centered <- scale(yt, center = TRUE, scale = FALSE)
-top_degs <- order(res$D_test_result$D_obs, decreasing = TRUE)[1:12]
+
+signal_genes <- head(d_result$ID[d_result$Known_signal], 4)
+null_genes <- head(d_result$ID[!d_result$Known_signal], 2)
+genes_to_plot <- c(signal_genes, null_genes)
+
+cell_stage <- factor(
+  cell_cluster,
+  levels = c("0", "1", "2"),
+  labels = c("Early", "Middle", "Late")
+)
+
+cluster_palette <- c(
+  Early = "#0072B2",
+  Middle = "#009E73",
+  Late = "#D55E00"
+)
 
 scFPCDE_gene_curves(
   tt = tt,
   yt = yt_centered,
-  yt_fit = res$fpca_result$xt_hat,
-  cell_cluster = clusters,
-  subset = top_degs,
-  nrow = 3,
-  ncol = 4
+  yt_fit = result$fpca_result$xt_hat,
+  cell_cluster = cell_stage,
+  subset = genes_to_plot,
+  nrow = 2,
+  ncol = 3,
+  point_size = 0.55,
+  point_alpha = 0.55,
+  curve_linewidth = 1,
+  cluster_colors = cluster_palette,
+  title = "Known signals and nulls along simulated pseudotime"
 )
 ```
 
-For larger analyses, first remove genes with very low detection using
-`scFPCDE_filter_genes()`, tune the smoothing parameters on a representative
-dataset, and save the returned result object together with the random seed and
-package version used for the analysis.
+For a small number of genes, trajectories can instead be overlaid:
+
+```{r overlay-example, eval=FALSE}
+scFPCDE_gene_curves(
+  tt = tt,
+  yt = yt_centered,
+  yt_fit = result$fpca_result$xt_hat,
+  cell_cluster = cell_stage,
+  subset = signal_genes[1:3],
+  facet_genes = FALSE,
+  cluster_colors = cluster_palette
+)
+```
+
+# Using the lower-level functions
+
+The wrapper is convenient, but each analysis component is exported. This is
+useful when the same FPCA fit should support custom diagnostics or when D- and
+F-tests need different permutation counts.
+
+```{r lower-level, eval=FALSE}
+yt_centered <- scale(yt, center = TRUE, scale = FALSE)
+
+fit <- scFPCDE_fit_fpca(
+  yt = yt_centered,
+  tt = tt,
+  L = tuning$best_L,
+  nbasis = tuning$best_nbasis,
+  r_pen = tuning$best_r_pen,
+  fpc_varmax = TRUE
+)
+
+set.seed(2026)
+d_test <- scFPCDE_D_test(
+  yt = yt_centered,
+  tt = tt,
+  fpca_result = fit,
+  n_perm = 1000,
+  ncores = 1
+)
+
+set.seed(2026)
+f_test <- scFPCDE_F_test(
+  yt = yt_centered,
+  tt = tt,
+  fpca_result = fit,
+  n_perm = 1000,
+  ncores = 1
+)
+```
+
+Unlike `scFPCDE_run()`, the lower-level fit does not perform the two-stage
+high-score refinement. Use the wrapper when that complete workflow is desired.
+
+# Template for a real analysis
+
+The following non-evaluated template summarizes the recommended progression.
+
+```{r real-template, eval=FALSE}
+# expression: cells x genes, normalized and finite
+# pseudotime: one value per cell
+# cell_state: one cluster or state label per cell
+
+genes_kept <- scFPCDE_filter_genes(expression, qz = 0.25)
+expression_use <- expression[, genes_kept, drop = FALSE]
+
+tuning <- scFPCDE_tune_fpca(
+  expression_use,
+  pseudotime,
+  L = 2,
+  nbasis_range = c(20, 30, 40, 50),
+  r_pen_range = 10^seq(-6, -1),
+  topvarper = 0.10,
+  ncores = 1
+)
+
+set.seed(2026)
+analysis <- scFPCDE_run(
+  expression_use,
+  pseudotime,
+  L = tuning$best_L,
+  nbasis = tuning$best_nbasis,
+  r_pen = tuning$best_r_pen,
+  topvarper = 0.10,
+  n_perm = 1000,
+  ncores = 1,
+  use_FPC_F = TRUE
+)
+
+significant_genes <- subset(
+  analysis$D_test_result,
+  q_value < 0.05
+)
+```
+
+Before interpreting a final analysis:
+
+1. inspect detection rates and the number of genes retained;
+2. verify that the tuning optimum is not an unexplored grid boundary;
+3. inspect eigenfunctions, variance proportions, scores, and fitted curves;
+4. repeat permutation inference with another seed to assess stability;
+5. consider pseudotime uncertainty and repeat the analysis across plausible
+   trajectories when possible;
+6. report the tested lineage, preprocessing, filtering rule, tuning grid,
+   `L`, `topvarper`, permutation count, seed, and package version; and
+7. save the complete result and tuning objects rather than only a list of
+   significant genes.
+
+```{r save-analysis, eval=FALSE}
+saveRDS(
+  list(
+    tuning = tuning,
+    result = analysis,
+    seed = 2026,
+    package_version = as.character(packageVersion("scFPCDE"))
+  ),
+  file = "scFPCDE_analysis.rds"
+)
+```
+
+# Reproducibility information
+
+```{r session-info}
+sessionInfo()
+```
