@@ -110,17 +110,15 @@ but it is not a claim about performance across all data-generating mechanisms.
 ```{r data}
 data(scFPCDE_simdata)
 
-# Use 180 cells, 30 known signals, and 70 known null genes.
-cell_index <- unique(round(seq(
-  1, length(scFPCDE_simdata$tt), length.out = 180
-)))
-gene_index <- c(1:30, 101:170)
+# Use the complete bundled simulation: no cell or gene preselection.
+yt <- scFPCDE_simdata$yt
+tt <- scFPCDE_simdata$tt
+cell_cluster <- scFPCDE_simdata$clusters
 
-yt <- scFPCDE_simdata$yt[cell_index, gene_index, drop = FALSE]
-tt <- scFPCDE_simdata$tt[cell_index]
-cell_cluster <- scFPCDE_simdata$clusters[cell_index]
-
-known_signal <- setNames(gene_index <= 100, colnames(yt))
+known_signal <- setNames(
+  seq_len(ncol(yt)) <= 100,
+  colnames(yt)
+)
 
 data.frame(
   Cells = nrow(yt),
@@ -132,8 +130,9 @@ data.frame(
 )
 ```
 
-The selected cells are already ordered by pseudotime. `scFPCDE_run()` also
-orders its inputs internally, so an unsorted input is acceptable.
+The complete bundled dataset is already ordered by pseudotime.
+`scFPCDE_run()` also orders its inputs internally, so an unsorted input is
+acceptable.
 
 # Filtering low-detection genes
 
@@ -141,21 +140,24 @@ orders its inputs internally, so an unsorted input is acceptable.
 retains genes above a user-specified quantile of those counts. It is intended
 for sparse count-like or log-expression matrices with heterogeneous detection.
 
-The bundled simulation is continuous and contains no zeros. To demonstrate the
-filter without pretending otherwise, the next chunk creates a documented
-didactic copy in which 20 null genes are observed in only 10 cells. The
-original, unmodified simulation is used for the FPCA analysis that follows.
+The bundled simulation is continuous and contains no zeros. Because all 500
+genes therefore have the same detection count, the strict quantile rule cannot
+distinguish them and should not be applied to the original matrix. To
+demonstrate the requested 5% filter without pretending otherwise, the next
+chunk creates a documented didactic copy in which 50 known-null genes are
+observed in only 10 cells. The original, unmodified full simulation is used for
+the FPCA analysis that follows.
 
 ```{r filtering}
 yt_sparse_demo <- yt
-sparse_gene_columns <- 81:100
+sparse_gene_columns <- 451:500
 
 yt_sparse_demo[, sparse_gene_columns] <- 0
 yt_sparse_demo[1:10, sparse_gene_columns] <-
   yt[1:10, sparse_gene_columns]
 
 detection_count <- colSums(yt_sparse_demo != 0)
-filter_quantile <- 0.20
+filter_quantile <- 0.05
 detection_threshold <- unname(quantile(detection_count, filter_quantile))
 
 genes_kept <- scFPCDE_filter_genes(
@@ -171,26 +173,35 @@ data.frame(
 )
 ```
 
-```{r filtering-plot, fig.cap="Genes above the detection-count quantile are retained for downstream analysis."}
+```{r filtering-plot, fig.cap="Genes above the 5th-percentile detection threshold are retained. A logarithmic y-axis keeps both low- and high-detection genes visible."}
 sorted_detection <- sort(unname(detection_count))
-barplot(
+gene_rank <- seq_along(sorted_detection)
+gene_status <- sorted_detection > detection_threshold
+
+plot(
+  gene_rank,
   sorted_detection,
-  names.arg = rep("", length(sorted_detection)),
-  border = NA,
-  col = ifelse(sorted_detection > detection_threshold,
-               "#2C7FB8", "grey75"),
+  type = "n",
+  log = "y",
+  ylim = c(max(1, min(sorted_detection) / 2), max(sorted_detection) * 1.2),
   xlab = "Genes ordered by detection count",
-  ylab = "Cells with nonzero expression",
+  ylab = "Cells with nonzero expression (log scale)",
   main = "Quantile-based detection filter"
 )
 abline(h = detection_threshold, lty = 2, lwd = 2, col = "#D95F02")
+points(
+  gene_rank,
+  sorted_detection,
+  pch = 16,
+  cex = 0.65,
+  col = ifelse(gene_status, "#2C7FB8", "grey65")
+)
 legend(
-  "topleft",
+  "left",
   legend = c("Retained", "Removed", "Threshold"),
-  fill = c("#2C7FB8", "grey75", NA),
-  border = c(NA, NA, NA),
+  pch = c(16, 16, NA),
   lty = c(NA, NA, 2),
-  col = c(NA, NA, "#D95F02"),
+  col = c("#2C7FB8", "grey65", "#D95F02"),
   bty = "o",
   bg = "white",
   box.col = "grey85",
@@ -210,7 +221,7 @@ quantile filter cannot distinguish genes and should be skipped. Filtering also
 changes the multiple-testing universe, so its rule should be chosen before
 examining gene-level p-values.
 
-# Tuning the spline basis and roughness penalty
+# Tuning the roughness penalty with a fixed basis
 
 Two parameters work together to determine trajectory smoothness:
 
@@ -219,23 +230,24 @@ Two parameters work together to determine trajectory smoothness:
 - `r_pen` is the penalty on the integrated squared second derivative. A larger
   penalty suppresses curvature and favors smoother trajectories.
 
-`scFPCDE_tune_fpca()` evaluates their combinations by mean generalized
-cross-validation (GCV). Lower GCV indicates a better balance between fit and
-smoothness for the genes used during tuning.
+For this example, the B-spline basis is fixed at 30 functions and
+`scFPCDE_tune_fpca()` evaluates only the roughness penalty by mean generalized
+cross-validation (GCV). Fixing the basis makes the diagnostic a single curve:
+lower GCV indicates a better balance between fit and smoothness for the genes
+used during tuning.
 
-For reproducibility, this vignette uses sequential evaluation. The grid is
-small enough for package checks but spans several orders of magnitude in the
-roughness penalty.
+For reproducibility, this vignette uses sequential evaluation. The penalty grid
+spans six orders of magnitude and contains the observed minimum.
 
 ```{r tune}
-nbasis_grid <- c(8, 12, 18, 24)
-roughness_grid <- c(1e-6, 1e-5, 1e-4, 1e-3)
+fixed_nbasis <- 30L
+roughness_grid <- 10^seq(-7, -1, by = 0.5)
 
 tuning <- scFPCDE_tune_fpca(
   yt = yt,
   tt = tt,
   L = 2,
-  nbasis_range = nbasis_grid,
+  nbasis_range = fixed_nbasis,
   r_pen_range = roughness_grid,
   topvarper = 0.25,
   ncores = 1
@@ -244,57 +256,66 @@ tuning <- scFPCDE_tune_fpca(
 tuning_table <- transform(
   tuning$parameter_grid,
   Mean_GCV = tuning$GCV_results,
-  Roughness_penalty = factor(
-    format(r_pen, scientific = TRUE),
-    levels = format(roughness_grid, scientific = TRUE)
-  )
+  Roughness_penalty = format(r_pen, scientific = TRUE, digits = 2)
 )
 
 knitr::kable(
-  tuning_table[, c("nbasis", "r_pen", "Mean_GCV")],
+  tuning_table[, c("nbasis", "Roughness_penalty", "Mean_GCV")],
   digits = c(0, 6, 6),
   col.names = c("B-spline basis functions", "Roughness penalty", "Mean GCV")
 )
 ```
 
-```{r tuning-plot, fig.cap="Mean generalized cross-validation across the candidate basis sizes and roughness penalties."}
+```{r tuning-plot, fig.cap="Mean generalized cross-validation over the roughness-penalty grid with the B-spline basis fixed at 30 functions. The orange point and dashed line identify the selected penalty."}
 ggplot2::ggplot(
   tuning_table,
-  ggplot2::aes(
-    x = factor(nbasis),
-    y = Roughness_penalty,
-    fill = Mean_GCV
-  )
+  ggplot2::aes(x = r_pen, y = Mean_GCV)
 ) +
-  ggplot2::geom_tile(color = "white", linewidth = 0.8) +
-  ggplot2::geom_text(
-    ggplot2::aes(label = format(Mean_GCV, digits = 3)),
+  ggplot2::geom_line(
+    color = "#0072B2",
+    linewidth = 1
+  ) +
+  ggplot2::geom_point(
+    color = "#0072B2",
+    size = 2.2
+  ) +
+  ggplot2::geom_vline(
+    xintercept = tuning$best_r_pen,
+    linetype = 2,
+    color = "#D55E00",
+    linewidth = 0.8
+  ) +
+  ggplot2::geom_point(
+    data = tuning_table[tuning_table$r_pen == tuning$best_r_pen, , drop = FALSE],
+    color = "#D55E00",
     size = 3
   ) +
-  ggplot2::scale_fill_viridis_c(option = "C", direction = -1) +
-  ggplot2::labs(
-    x = "B-spline basis functions",
-    y = "Roughness penalty",
-    fill = "Mean GCV",
-    title = "FPCA tuning surface"
+  ggplot2::scale_x_log10(
+    breaks = 10^seq(-7, -1),
+    labels = function(x) format(x, scientific = TRUE)
   ) +
-  ggplot2::theme_bw(base_size = 11) +
-  ggplot2::theme(panel.grid = ggplot2::element_blank())
+  ggplot2::labs(
+    x = "Roughness penalty (log10 scale)",
+    y = "Mean GCV",
+    title = "Roughness-penalty tuning with 30 basis functions"
+  ) +
+  ggplot2::theme_bw(base_size = 11)
 ```
 
 ```{r selected-tuning}
 data.frame(
   L = tuning$best_L,
-  nbasis = tuning$best_nbasis,
+  Fixed_nbasis = fixed_nbasis,
   r_pen = tuning$best_r_pen,
   Mean_GCV = tuning$GCV
 )
 ```
 
-The selected basis size lies on the lower edge of this compact teaching grid.
-For a final analysis, an optimum on any grid boundary is a reason to expand the
-grid in that direction and check whether the choice is stable. The grid should
-also be revisited when the lineage, normalization, or cell density changes.
+Here, the fixed 30-function basis gives a clear interior GCV minimum over the
+candidate penalties. For a final analysis, a minimum on either boundary is a
+reason to expand the penalty grid and check whether the choice is stable. The
+fixed basis and penalty grid should also be revisited when the lineage,
+normalization, or cell density changes.
 
 `L` is intentionally specified rather than selected by GCV. Two or three FPCs
 are common starting points. Increase `L` only when additional components explain
@@ -319,7 +340,7 @@ result <- scFPCDE_run(
   yt = yt,
   tt = tt,
   L = tuning$best_L,
-  nbasis = tuning$best_nbasis,
+  nbasis = fixed_nbasis,
   r_pen = tuning$best_r_pen,
   topvarper = 0.25,
   center = TRUE,
@@ -520,7 +541,7 @@ hist(
   result$D_test_result$p_value,
   breaks = seq(0, 1, length.out = 21),
   col = "#9ECAE1",
-  border = "white",
+  border = "white",ylim = c(0,120),
   main = "D-test",
   xlab = "Permutation p-value"
 )
@@ -529,24 +550,24 @@ hist(
   breaks = seq(0, 1, length.out = 21),
   col = "#FDD0A2",
   border = "white",
-  main = "F-test",
+  main = "F-test", ylim = c(0,120),
   xlab = "Permutation p-value"
 )
 par(old_par)
 ```
 
-Here, the D-test recovers most known signals and the F-test recovers all of them
-without selecting a known null in this one subset. These numbers should not be
-generalized beyond this demonstration. A formal simulation study would repeat
-many independently generated datasets across sample sizes, signal shapes,
-dropout levels, and pseudotime uncertainty.
+The summary above shows complete sensitivity for both tests in this full-data
+run. The D-test selects no known nulls, whereas the F-test selects two. These
+numbers should not be generalized beyond this demonstration. A formal
+simulation study would repeat many independently generated datasets across
+sample sizes, signal shapes, dropout levels, and pseudotime uncertainty.
 
 # Plot observed and fitted gene trajectories
 
 `scFPCDE_run()` centers genes internally by default, so the observations passed
-to `scFPCDE_gene_curves()` should receive the same transformation. Because this
-example's cells were selected in increasing pseudotime order, the fitted and
-observed rows are already aligned.
+to `scFPCDE_gene_curves()` should receive the same transformation. The bundled
+simulation rows are already in increasing pseudotime order, so the fitted and
+observed rows are aligned.
 
 The plot below combines four high-ranking known signals with two of the
 highest-ranking known nulls. This makes both clear functional structure and
@@ -614,7 +635,7 @@ fit <- scFPCDE_fit_fpca(
   yt = yt_centered,
   tt = tt,
   L = tuning$best_L,
-  nbasis = tuning$best_nbasis,
+  nbasis = fixed_nbasis,
   r_pen = tuning$best_r_pen,
   fpc_varmax = TRUE
 )
@@ -650,15 +671,17 @@ The following non-evaluated template summarizes the recommended progression.
 # pseudotime: one value per cell
 # cell_state: one cluster or state label per cell
 
-genes_kept <- scFPCDE_filter_genes(expression, qz = 0.25)
+genes_kept <- scFPCDE_filter_genes(expression, qz = 0.05)
 expression_use <- expression[, genes_kept, drop = FALSE]
+
+fixed_nbasis <- 30L
 
 tuning <- scFPCDE_tune_fpca(
   expression_use,
   pseudotime,
   L = 2,
-  nbasis_range = c(20, 30, 40, 50),
-  r_pen_range = 10^seq(-6, -1),
+  nbasis_range = fixed_nbasis,
+  r_pen_range = 10^seq(-7, -1, by = 0.5),
   topvarper = 0.10,
   ncores = 1
 )
@@ -668,7 +691,7 @@ analysis <- scFPCDE_run(
   expression_use,
   pseudotime,
   L = tuning$best_L,
-  nbasis = tuning$best_nbasis,
+  nbasis = fixed_nbasis,
   r_pen = tuning$best_r_pen,
   topvarper = 0.10,
   n_perm = 1000,
