@@ -7,7 +7,9 @@
 #' @param tt Numeric pseudotime vector with one value per row of `yt`.
 #' @param yt Numeric observed expression matrix with observations in rows and
 #'   genes in columns. When plotting a result from [scFPCDE_run()], apply the
-#'   same centering and scaling used in that call.
+#'   same centering and scaling used in that call. To plot an analysis fitted
+#'   with `center = TRUE` on its original expression scale, add the original
+#'   gene means back to `yt_fit` and supply the uncentered observations here.
 #' @param yt_fit Numeric matrix of fitted expression values with the same
 #'   dimensions and gene names as `yt`.
 #' @param cell_cluster Vector of cluster assignments with one value per row of

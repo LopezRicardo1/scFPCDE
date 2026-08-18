@@ -28,7 +28,9 @@ scFPCDE_gene_curves(
 
 \item{yt}{Numeric observed expression matrix with observations in rows and
 genes in columns. When plotting a result from [scFPCDE_run()], apply the
-same centering and scaling used in that call.}
+same centering and scaling used in that call. To plot an analysis fitted
+with `center = TRUE` on its original expression scale, add the original
+gene means back to `yt_fit` and supply the uncentered observations here.}
 
 \item{yt_fit}{Numeric matrix of fitted expression values with the same
 dimensions and gene names as `yt`.}

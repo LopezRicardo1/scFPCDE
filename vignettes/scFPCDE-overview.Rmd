@@ -5,6 +5,7 @@ output:
   rmarkdown::html_vignette:
     toc: true
     number_sections: true
+bibliography: references.bib
 vignette: >
   %\VignetteIndexEntry{A Practical scFPCDE Workflow}
   %\VignetteEngine{knitr::rmarkdown}
@@ -98,6 +99,324 @@ Important modeling choices are:
   eigenfunctions; and
 - `fpc_varmax = TRUE` rotates the retained FPCs for interpretability without
   changing their retained subspace.
+
+# A real HB6 B-cell trajectory
+
+The package includes the two HB6 trajectories used in the manuscript analysis.
+They originate from the public single-cell B-cell study E-MTAB-9544
+[@stewart2021bcell]. The packaged object contains only the analysis-ready
+`logcounts` matrices, pseudotime, B-cell subset labels, identifiers, and
+provenance metadata. It does not contain the much larger Seurat or Monocle
+objects and does not rerun trajectory inference.
+
+```{r hb6-data}
+data(scFPCDE_hb6)
+
+hb6_summary <- do.call(rbind, lapply(names(scFPCDE_hb6), function(name) {
+  trajectory <- scFPCDE_hb6[[name]]
+  data.frame(
+    Trajectory = name,
+    Cell_states = paste(levels(trajectory$clusters), collapse = " - "),
+    Cells = nrow(trajectory$yt),
+    Genes = ncol(trajectory$yt),
+    Pseudotime_min = min(trajectory$tt),
+    Pseudotime_max = max(trajectory$tt),
+    check.names = FALSE
+  )
+}))
+
+knitr::kable(hb6_summary, digits = 2, row.names = FALSE)
+```
+
+Each trajectory follows the same input contract as the package functions. The
+explicit checks below are useful whenever expression, pseudotime, and metadata
+are assembled from separate single-cell objects.
+
+```{r hb6-alignment}
+hb6 <- scFPCDE_hb6$traj1
+
+stopifnot(
+  identical(rownames(hb6$yt), names(hb6$tt)),
+  identical(rownames(hb6$yt), names(hb6$clusters)),
+  identical(colnames(hb6$yt), hb6$gene_id),
+  all(is.finite(hb6$yt)),
+  all(is.finite(hb6$tt))
+)
+
+table(hb6$clusters)
+```
+
+## Apply the detection filter to the complete trajectory
+
+The HB6 matrix is sparse enough for a detection filter to be meaningful. We
+apply the 5th-percentile rule to all 2,928 cells and all 2,995 packaged genes
+before making any tutorial-sized subset. A gene is retained only when its
+number of nonzero observations is strictly greater than the selected
+quantile.
+
+```{r hb6-filter}
+hb6_filter_quantile <- 0.05
+hb6_detection <- colSums(hb6$yt != 0)
+hb6_detection_threshold <- unname(quantile(
+  hb6_detection,
+  hb6_filter_quantile
+))
+hb6_genes_kept <- scFPCDE_filter_genes(
+  hb6$yt,
+  qz = hb6_filter_quantile
+)
+
+data.frame(
+  Input_genes = ncol(hb6$yt),
+  Detection_threshold = hb6_detection_threshold,
+  Retained_genes = length(hb6_genes_kept),
+  Removed_genes = ncol(hb6$yt) - length(hb6_genes_kept)
+)
+```
+
+```{r hb6-filter-plot, fig.cap="Detection counts for every gene in the complete HB6 trajectory-1 matrix. The dashed line is the 5th-percentile threshold."}
+hb6_detection_sorted <- sort(hb6_detection)
+plot(
+  seq_along(hb6_detection_sorted),
+  hb6_detection_sorted,
+  pch = 16,
+  cex = 0.45,
+  col = ifelse(
+    hb6_detection_sorted > hb6_detection_threshold,
+    "#2C7FB8",
+    "grey70"
+  ),
+  xlab = "Genes ordered by detection count",
+  ylab = "Cells with nonzero expression",
+  main = "HB6 trajectory-1 detection filter"
+)
+abline(
+  h = hb6_detection_threshold,
+  lty = 2,
+  lwd = 2,
+  col = "#D95F02"
+)
+```
+
+## Construct a runnable tutorial analysis
+
+The complete paper analysis used every selected cell and gene and 500
+permutations. To keep package installation and vignette rebuilding quick, the
+evaluated tutorial deterministically takes 100 cells spaced across pseudotime
+within each of the three B-cell states. After the full-data detection filter,
+it retains the 180 genes with the largest variance in those tutorial cells.
+This runtime subset teaches the complete workflow; it is not a replacement for
+the full manuscript analysis.
+
+```{r hb6-tutorial-input}
+hb6_cells <- unlist(lapply(levels(hb6$clusters), function(cell_state) {
+  index <- which(hb6$clusters == cell_state)
+  index <- index[order(hb6$tt[index])]
+  locations <- unique(round(seq(
+    1,
+    length(index),
+    length.out = min(100L, length(index))
+  )))
+  index[locations]
+}))
+
+hb6_filtered <- hb6$yt[hb6_cells, hb6_genes_kept, drop = FALSE]
+hb6_variance <- apply(hb6_filtered, 2, var)
+hb6_analysis_genes <- names(head(sort(
+  hb6_variance,
+  decreasing = TRUE
+), 180L))
+
+hb6_yt <- hb6_filtered[, hb6_analysis_genes, drop = FALSE]
+hb6_tt <- hb6$tt[hb6_cells]
+hb6_cluster <- hb6$clusters[hb6_cells]
+
+# Keep all downstream matrices and labels in increasing-pseudotime order.
+hb6_order <- order(hb6_tt)
+hb6_yt <- hb6_yt[hb6_order, , drop = FALSE]
+hb6_tt <- hb6_tt[hb6_order]
+hb6_cluster <- droplevels(hb6_cluster[hb6_order])
+
+data.frame(
+  Tutorial_cells = nrow(hb6_yt),
+  Tutorial_genes = ncol(hb6_yt),
+  Basis_functions = 30,
+  FPCs = 3,
+  Permutations = 100
+)
+```
+
+## Tune roughness with 30 fixed basis functions
+
+We fix `nbasis = 30`, as in the paper analysis, and tune only the curvature
+penalty. This produces the most direct diagnostic: one GCV curve whose minimum
+identifies the selected penalty. The candidate grid spans under-smoothed and
+over-smoothed fits on a log scale.
+
+```{r hb6-tune}
+hb6_fixed_nbasis <- 30L
+hb6_roughness_grid <- c(1, 2, 5, 10, 20, 50, 100, 200, 500)
+
+hb6_tuning <- scFPCDE_tune_fpca(
+  yt = hb6_yt,
+  tt = hb6_tt,
+  L = 3,
+  nbasis_range = hb6_fixed_nbasis,
+  r_pen_range = hb6_roughness_grid,
+  topvarper = 0.10,
+  ncores = 1
+)
+
+hb6_tuning_table <- transform(
+  hb6_tuning$parameter_grid,
+  Mean_GCV = hb6_tuning$GCV_results
+)
+
+knitr::kable(hb6_tuning_table, digits = 4, row.names = FALSE)
+```
+
+```{r hb6-gcv-plot, fig.cap="Mean GCV over the HB6 roughness-penalty grid with the B-spline basis fixed at 30. The orange point identifies the selected penalty."}
+ggplot2::ggplot(
+  hb6_tuning_table,
+  ggplot2::aes(x = r_pen, y = Mean_GCV)
+) +
+  ggplot2::geom_line(color = "#0072B2", linewidth = 1) +
+  ggplot2::geom_point(color = "#0072B2", size = 2.2) +
+  ggplot2::geom_vline(
+    xintercept = hb6_tuning$best_r_pen,
+    linetype = 2,
+    color = "#D55E00"
+  ) +
+  ggplot2::geom_point(
+    data = hb6_tuning_table[
+      hb6_tuning_table$r_pen == hb6_tuning$best_r_pen,
+      ,
+      drop = FALSE
+    ],
+    color = "#D55E00",
+    size = 3
+  ) +
+  ggplot2::scale_x_log10(breaks = hb6_roughness_grid) +
+  ggplot2::labs(
+    x = "Roughness penalty (log10 scale)",
+    y = "Mean GCV",
+    title = "HB6 roughness-penalty tuning"
+  ) +
+  ggplot2::theme_bw(base_size = 11)
+```
+
+## Fit, test, and inspect the real-data result
+
+The tutorial performs 100 permutations for both the D- and F-statistics. This
+is enough to demonstrate the mechanics and produce a nontrivial permutation
+null. Use the manuscript setting of 500 permutations, or more for finer
+p-value resolution, for the complete analysis.
+
+```{r hb6-run}
+set.seed(2026)
+hb6_result <- scFPCDE_run(
+  yt = hb6_yt,
+  tt = hb6_tt,
+  L = 3,
+  nbasis = hb6_fixed_nbasis,
+  r_pen = hb6_tuning$best_r_pen,
+  topvarper = 0.10,
+  center = TRUE,
+  scale = FALSE,
+  n_perm = 100,
+  ncores = 1,
+  use_FPC_F = TRUE,
+  fpc_varmax = TRUE
+)
+
+hb6_ranked <- hb6_result$D_test_result[order(
+  hb6_result$D_test_result$q_value,
+  hb6_result$D_test_result$p_value,
+  -hb6_result$D_test_result$D_obs
+), ]
+
+knitr::kable(
+  head(hb6_ranked, 10),
+  digits = c(NA, 3, 4, 4),
+  row.names = FALSE,
+  caption = "Highest-ranking genes in the HB6 tutorial analysis"
+)
+```
+
+The FPC score transformation is for visualization only. The raw scores remain
+the correct coordinates for the D-statistic and permutation inference.
+
+```{r hb6-score-plot, fig.cap="Signed-log10-compressed gene-level FPC scores for the HB6 tutorial analysis."}
+hb6_scores <- scFPCDE_fpc_scores(
+  hb6_result,
+  components = 1:2,
+  transform = "signed_log10"
+)
+hb6_q <- setNames(
+  hb6_result$D_test_result$q_value,
+  hb6_result$D_test_result$ID
+)
+
+plot(
+  hb6_scores[, 1],
+  hb6_scores[, 2],
+  pch = 16,
+  cex = 0.75,
+  col = ifelse(hb6_q[rownames(hb6_scores)] < 0.05, "#D55E00", "grey70"),
+  xlab = "Signed-log10 FPC1 score",
+  ylab = "Signed-log10 FPC2 score",
+  main = "HB6 gene-level FPC scores"
+)
+abline(h = 0, v = 0, lty = 3, col = "grey55")
+legend(
+  "topright",
+  legend = c("D-test q < 0.05", "Other"),
+  col = c("#D55E00", "grey70"),
+  pch = 16,
+  bty = "n"
+)
+```
+
+`scFPCDE_run()` fits centered expression when `center = TRUE`. To display the
+observations and curves on the original log-normalized scale, add each gene's
+mean back to the fitted values and pass the original uncentered matrix to the
+plotting function. This is the same reconstruction used in the paper figures.
+
+```{r hb6-gene-curves, fig.width=8, fig.height=5.8, fig.cap="Observed HB6 log-normalized expression and FPCA-fitted curves after restoring each gene's mean."}
+hb6_gene_means <- colMeans(hb6_yt)
+hb6_fit_logcounts <- sweep(
+  hb6_result$fpca_result$xt_hat,
+  MARGIN = 2,
+  STATS = hb6_gene_means,
+  FUN = "+"
+)
+hb6_top_genes <- head(hb6_ranked$ID, 6)
+
+hb6_palette <- c(
+  Trans = "#0072B2",
+  Naive = "#009E73",
+  `C-mem1` = "#D55E00"
+)
+
+scFPCDE_gene_curves(
+  tt = hb6_tt,
+  yt = hb6_yt,
+  yt_fit = hb6_fit_logcounts,
+  cell_cluster = hb6_cluster,
+  subset = hb6_top_genes,
+  nrow = 2,
+  ncol = 3,
+  cluster_colors = hb6_palette,
+  title = "HB6 observed and fitted gene trajectories"
+) +
+  ggplot2::labs(y = "Log-normalized expression")
+```
+
+The second packaged trajectory can be analyzed by replacing `traj1` with
+`traj2`. For manuscript reproduction, use all cells and analysis genes from
+the selected trajectory, its recorded parameter grid in `metadata`, and the
+desired permutation count. The simulation below serves a different purpose:
+because its truth is known, it can show how signal and null genes behave.
 
 # A known-truth example
 

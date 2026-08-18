@@ -15,7 +15,33 @@ Install the development version from GitHub:
 remotes::install_github("NLM-DIR/scFPCDE", build_vignettes = TRUE)
 ```
 
-## Quick start
+## Included example data
+
+`scFPCDE_hb6` contains the two analysis-ready HB6 B-cell trajectories used in
+the manuscript: uncentered log-normalized expression, aligned pseudotime,
+cluster labels, and provenance metadata. The source Seurat and Monocle objects
+are not bundled. `scFPCDE_simdata` is a separate known-truth simulation for
+method checks and teaching.
+
+```r
+data(scFPCDE_hb6)
+hb6 <- scFPCDE_hb6$traj1
+
+stopifnot(
+  identical(rownames(hb6$yt), names(hb6$tt)),
+  identical(rownames(hb6$yt), names(hb6$clusters))
+)
+
+genes_kept <- scFPCDE_filter_genes(hb6$yt, qz = 0.05)
+hb6$yt[, genes_kept, drop = FALSE]
+```
+
+The complete real-data tutorial in `vignette("scFPCDE-overview")` demonstrates
+fixed-basis roughness tuning, the GCV curve, 100-permutation D- and F-tests,
+FPC score visualization, and fitted curves on the original log-expression
+scale.
+
+## Quick simulation check
 
 The bundled simulation contains 1,000 cells and 500 genes. For a quick example,
 the code below uses 20 differentially expressed genes, 40 null genes, and 100
@@ -77,8 +103,8 @@ Use `scFPCDE_fpc_scores()` to extract raw gene-level FPC scores or create
 signed-log10-compressed and standardized coordinates for visualization. Keep
 the raw scores for inference, distance calculations, and null boundaries.
 
-See `vignette("scFPCDE-overview")` for a guided workflow and the function help
-pages for parameter details.
+See `vignette("scFPCDE-overview")` for the guided real-data and known-truth
+workflows, and the function help pages for parameter details.
 
 ## Citation
 
