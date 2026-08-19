@@ -1,15 +1,18 @@
 #' HB6 B-Cell Trajectory Inputs from the Manuscript Analysis
 #'
-#' Log-normalized expression, pseudotime, and B-cell subset labels for the two
-#' HB6 trajectories analyzed in the scFPCDE manuscript. These are derived,
-#' package-ready inputs extracted from the saved `cds_sub` objects used by the
-#' official analysis; Seurat and Monocle objects are not included.
+#' Log-normalized expression, aligned raw counts, pseudotime, and B-cell subset
+#' labels for the two HB6 trajectories analyzed in the scFPCDE manuscript.
+#' These are derived, package-ready inputs extracted from the saved `cds_sub`
+#' objects used by the official analysis; Seurat and Monocle objects are not
+#' included.
 #'
 #' @format A named list with components `traj1` and `traj2`. Each trajectory is
 #'   a list containing:
 #' \describe{
 #'   \item{yt}{An uncentered numeric matrix with cells in rows and genes in
 #'   columns. Values come from the Monocle `logcounts` assay.}
+#'   \item{counts}{A non-negative raw-count matrix with the same cell-by-gene
+#'   dimensions and dimnames as `yt`.}
 #'   \item{tt}{A named numeric pseudotime vector aligned to the rows of `yt`.}
 #'   \item{clusters}{A named factor of B-cell subset labels aligned to the rows
 #'   of `yt`.}

@@ -2,9 +2,10 @@
 
 `scFPCDE_hb6.R` extracts the two exact cell and gene subsets used by the
 manuscript analysis from `res_traj1.rds` and `res_traj2.rds`. It reads the
-uncentered `logcounts` assay from each saved `cds_sub` object and writes only
-plain R matrices, vectors, and provenance metadata to the package data file.
-The large Monocle and Seurat objects are not included in the package.
+uncentered `logcounts` and aligned raw `counts` assays from each saved
+`cds_sub` object and writes only plain R matrices, vectors, and provenance
+metadata to the package data file. The large Monocle and Seurat objects are not
+included in the package.
 
 From the package root, run:
 

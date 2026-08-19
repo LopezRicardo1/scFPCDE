@@ -20,10 +20,14 @@ test_that("HB6 expression, pseudotime, and labels are exactly aligned", {
   for (trajectory in scFPCDE_hb6) {
     expect_identical(rownames(trajectory$yt), trajectory$cell_id)
     expect_identical(colnames(trajectory$yt), trajectory$gene_id)
+    expect_identical(dimnames(trajectory$counts), dimnames(trajectory$yt))
     expect_identical(names(trajectory$tt), trajectory$cell_id)
     expect_identical(names(trajectory$clusters), trajectory$cell_id)
     expect_equal(anyDuplicated(trajectory$gene_id), 0L)
     expect_true(all(is.finite(trajectory$yt)))
+    expect_true(all(is.finite(trajectory$counts)))
+    expect_true(all(trajectory$counts >= 0))
+    expect_true(all(trajectory$counts == floor(trajectory$counts)))
     expect_true(all(is.finite(trajectory$tt)))
     expect_false(anyNA(trajectory$clusters))
     expect_false(isTRUE(all.equal(
@@ -32,6 +36,7 @@ test_that("HB6 expression, pseudotime, and labels are exactly aligned", {
     )))
     expect_false(trajectory$metadata$expression_centered)
     expect_identical(trajectory$metadata$expression_assay, "logcounts")
+    expect_identical(trajectory$metadata$count_assay, "counts")
   }
 })
 

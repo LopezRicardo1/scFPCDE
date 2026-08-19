@@ -56,7 +56,9 @@ extract_trajectory <- function(path, trajectory_label) {
   }
 
   logcounts <- SummarizedExperiment::assay(result$cds_sub, "logcounts")
+  raw_counts <- SummarizedExperiment::assay(result$cds_sub, "counts")
   yt <- t(as.matrix(logcounts[gene_id, cell_id, drop = FALSE]))
+  counts <- t(as.matrix(raw_counts[gene_id, cell_id, drop = FALSE]))
   tt <- as.numeric(result$tt[cell_id])
   names(tt) <- cell_id
   clusters <- droplevels(result$tt.cluster[cell_id])
@@ -65,6 +67,7 @@ extract_trajectory <- function(path, trajectory_label) {
   config <- result$config
   trajectory <- list(
     yt = yt,
+    counts = counts,
     tt = tt,
     clusters = clusters,
     cell_id = cell_id,
@@ -77,6 +80,7 @@ extract_trajectory <- function(path, trajectory_label) {
       source_object = "cds_sub",
       expression_assay = "logcounts",
       expression_centered = FALSE,
+      count_assay = "counts",
       gene_selection = paste(
         "Unique gene columns from the official paper analysis y matrix;",
         "the duplicated ACTB column in trajectory 1 is retained once."
@@ -100,15 +104,19 @@ extract_trajectory <- function(path, trajectory_label) {
   stopifnot(
     identical(rownames(trajectory$yt), trajectory$cell_id),
     identical(colnames(trajectory$yt), trajectory$gene_id),
+    identical(dimnames(trajectory$counts), dimnames(trajectory$yt)),
     identical(names(trajectory$tt), trajectory$cell_id),
     identical(names(trajectory$clusters), trajectory$cell_id),
     length(unique(trajectory$gene_id)) == length(trajectory$gene_id),
     all(is.finite(trajectory$yt)),
+    all(is.finite(trajectory$counts)),
+    all(trajectory$counts >= 0),
+    all(trajectory$counts == floor(trajectory$counts)),
     all(is.finite(trajectory$tt)),
     !anyNA(trajectory$clusters)
   )
 
-  rm(result, logcounts)
+  rm(result, logcounts, raw_counts)
   invisible(gc())
   trajectory
 }

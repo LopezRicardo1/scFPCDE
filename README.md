@@ -18,10 +18,10 @@ remotes::install_github("NLM-DIR/scFPCDE", build_vignettes = TRUE)
 ## Included example data
 
 `scFPCDE_hb6` contains the two analysis-ready HB6 B-cell trajectories used in
-the manuscript: uncentered log-normalized expression, aligned pseudotime,
-cluster labels, and provenance metadata. The source Seurat and Monocle objects
-are not bundled. `scFPCDE_simdata` is a separate known-truth simulation for
-method checks and teaching.
+the manuscript: uncentered log-normalized expression, aligned raw counts,
+pseudotime, cluster labels, and provenance metadata. The source Seurat and
+Monocle objects are not bundled. `scFPCDE_simdata` is a separate known-truth
+simulation for method checks and teaching.
 
 ```r
 data(scFPCDE_hb6)

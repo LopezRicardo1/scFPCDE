@@ -105,9 +105,9 @@ Important modeling choices are:
 The package includes the two HB6 trajectories used in the manuscript analysis.
 They originate from the public single-cell B-cell study E-MTAB-9544
 [@stewart2021bcell]. The packaged object contains only the analysis-ready
-`logcounts` matrices, pseudotime, B-cell subset labels, identifiers, and
-provenance metadata. It does not contain the much larger Seurat or Monocle
-objects and does not rerun trajectory inference.
+aligned `logcounts` and raw-count matrices, pseudotime, B-cell subset labels,
+identifiers, and provenance metadata. It does not contain the much larger
+Seurat or Monocle objects and does not rerun trajectory inference.
 
 ```{r hb6-data}
 data(scFPCDE_hb6)
