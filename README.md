@@ -17,29 +17,20 @@ remotes::install_github("NLM-DIR/scFPCDE", build_vignettes = TRUE)
 
 ## Included example data
 
-`scFPCDE_hb6` contains the two analysis-ready HB6 B-cell trajectories used in
-the manuscript: uncentered log-normalized expression, aligned raw counts,
-pseudotime, cluster labels, and provenance metadata. The source Seurat and
-Monocle objects are not bundled. `scFPCDE_simdata` is a separate known-truth
-simulation for method checks and teaching.
+`scFPCDE_simdata` is a known-truth simulation for method checks and teaching.
+The manuscript HB6 data are distributed separately in the
+[`scFPCDE-paper-code`](https://github.com/LopezRicardo1/scFPCDE-paper-code)
+repository so that the R package remains focused and lightweight.
 
 ```r
-data(scFPCDE_hb6)
-hb6 <- scFPCDE_hb6$traj1
-
-stopifnot(
-  identical(rownames(hb6$yt), names(hb6$tt)),
-  identical(rownames(hb6$yt), names(hb6$clusters))
-)
-
-genes_kept <- scFPCDE_filter_genes(hb6$yt, qz = 0.05)
-hb6$yt[, genes_kept, drop = FALSE]
+data(scFPCDE_simdata)
+str(scFPCDE_simdata, max.level = 1)
 ```
 
-The complete real-data tutorial in `vignette("scFPCDE-overview")` demonstrates
-fixed-basis roughness tuning, the GCV curve, 100-permutation D- and F-tests,
-FPC score visualization, and fitted curves on the original log-expression
-scale.
+The package vignette demonstrates filtering, fixed-basis roughness tuning,
+the GCV curve, 100-permutation D- and F-tests, FPC score visualization, and
+fitted curves using the bundled simulation. The paper-code repository contains
+the corresponding real-data workflow.
 
 ## Quick simulation check
 
@@ -103,8 +94,8 @@ Use `scFPCDE_fpc_scores()` to extract raw gene-level FPC scores or create
 signed-log10-compressed and standardized coordinates for visualization. Keep
 the raw scores for inference, distance calculations, and null boundaries.
 
-See `vignette("scFPCDE-overview")` for the guided real-data and known-truth
-workflows, and the function help pages for parameter details.
+See `vignette("scFPCDE-overview")` for the guided known-truth workflow and the
+function help pages for parameter details.
 
 ## Citation
 
